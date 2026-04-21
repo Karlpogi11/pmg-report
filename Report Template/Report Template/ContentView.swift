@@ -45,6 +45,7 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .help("Clear search")
                     }
                 }
                 .padding(10)
@@ -117,13 +118,18 @@ struct ContentView: View {
             ZStack {
                 Color(nsColor: .windowBackgroundColor)
                     .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 20) {
-                        headerCard
-                        formCard
+
+                if viewModel.hasActiveReport {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            headerCard
+                            formCard
+                        }
+                        .padding(20)
                     }
-                    .padding(20)
+                } else {
+                    emptyReportState
+                        .padding(20)
                 }
             }
             .toolbar {
@@ -138,10 +144,12 @@ struct ContentView: View {
                         Button(action: { showingSettings = true }) {
                             Label("Settings", systemImage: "gearshape")
                         }
+                        .help("Open settings")
                         
                         Button(action: { showingNewReportSheet = true }) {
                             Label("New Report", systemImage: "plus.circle.fill")
                         }
+                        .help("Create a new report")
                         .keyboardShortcut("n", modifiers: .command)
                     }
                 }
@@ -256,6 +264,7 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
+        .help("Open report from \(report.date) at \(report.time)")
         .listRowBackground(Color.clear)
     }
     
@@ -350,10 +359,38 @@ struct ContentView: View {
                 }
                 .disabled(viewModel.isEmpty)
                 .buttonStyle(.plain)
+                .help("Copy current report")
                 .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         }
         .padding(20)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(16)
+    }
+
+    private var emptyReportState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "doc.badge.plus")
+                .font(.system(size: 36))
+                .foregroundStyle(.tertiary)
+
+            Text("No Active Report")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            Text("Click New Report to start, or select a saved report from the sidebar.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button(action: { showingNewReportSheet = true }) {
+                Label("New Report", systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .help("Create a new report")
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(16)
     }
@@ -435,6 +472,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
+                        .help("Edit report time")
                     }
                     Text(viewModel.currentReport.time)
                         .font(.system(.body, design: .rounded))
@@ -1013,6 +1051,7 @@ struct ModernReportSection: View {
     let title: String
     @Binding var text: String
     let icon: String
+    @State private var editorHeight: CGFloat = 100
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1026,8 +1065,8 @@ struct ModernReportSection: View {
                     .textCase(.uppercase)
             }
             
-            LinkAwareTextEditor(text: $text)
-                .frame(minHeight: 100)
+            LinkAwareTextEditor(text: $text, dynamicHeight: $editorHeight)
+                .frame(height: max(100, editorHeight))
                 .background(Color(nsColor: .textBackgroundColor))
                 .cornerRadius(10)
         }
@@ -1036,6 +1075,7 @@ struct ModernReportSection: View {
 
 private struct LinkAwareTextEditor: NSViewRepresentable {
     @Binding var text: String
+    @Binding var dynamicHeight: CGFloat
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -1053,7 +1093,7 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
         let textView = LinkAwareNSTextView(frame: .zero, textContainer: textContainer)
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.isVerticallyResizable = true
+        textView.isVerticallyResizable = false
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = NSView.AutoresizingMask.width
         textContainer.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
@@ -1076,14 +1116,15 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
 
         let scrollView = NSScrollView()
         scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
+        scrollView.autohidesScrollers = false
         scrollView.drawsBackground = false
         scrollView.documentView = textView
 
         textView.string = text
         context.coordinator.applyLinkStyle(in: textView)
+        context.coordinator.recalculateHeight(for: textView)
         return scrollView
     }
 
@@ -1097,6 +1138,8 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
             textView.string = text
             context.coordinator.applyLinkStyle(in: textView)
         }
+
+        context.coordinator.recalculateHeight(for: textView)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -1111,6 +1154,7 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
             applyLinkStyle(in: textView)
+            recalculateHeight(for: textView)
         }
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
@@ -1161,6 +1205,27 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
             textStorage.endEditing()
 
             textView.selectedRanges = selectedRanges
+        }
+
+        func recalculateHeight(for textView: NSTextView) {
+            guard let textContainer = textView.textContainer,
+                  let layoutManager = textView.layoutManager else {
+                return
+            }
+
+            let targetWidth = max(textView.bounds.width, 1)
+            textContainer.containerSize = NSSize(width: targetWidth, height: .greatestFiniteMagnitude)
+            layoutManager.ensureLayout(for: textContainer)
+
+            let usedRect = layoutManager.usedRect(for: textContainer)
+            let insetHeight = textView.textContainerInset.height * 2
+            let measured = max(100, ceil(usedRect.height + insetHeight + 2))
+
+            if abs(parent.dynamicHeight - measured) > 0.5 {
+                DispatchQueue.main.async {
+                    self.parent.dynamicHeight = measured
+                }
+            }
         }
     }
 }
@@ -1410,6 +1475,7 @@ class ReportViewModel: ObservableObject {
     @Published var history: [Report] = []
     @Published var hasUnsavedChanges = false
     @Published var settings = ReportSettings()
+    @Published var hasActiveReport = false
     
     private var autoSaveTimer: Timer?
     private let saveKey = "reportHistory"
@@ -1441,10 +1507,16 @@ class ReportViewModel: ObservableObject {
     func createNewReport(date: Date, time: String? = nil) {
         saveCurrentReport()
         currentReport = Report(date: date, time: time)
+        hasActiveReport = true
         hasUnsavedChanges = false
     }
     
     func saveCurrentReport() {
+        guard hasActiveReport else {
+            hasUnsavedChanges = false
+            return
+        }
+
         guard !currentReport.isEmpty else {
             hasUnsavedChanges = false
             return
@@ -1463,11 +1535,24 @@ class ReportViewModel: ObservableObject {
     func loadReport(_ report: Report) {
         saveCurrentReport() // Save current before loading another
         currentReport = report
+        hasActiveReport = true
         hasUnsavedChanges = false
     }
     
     func deleteReport(_ report: Report) {
         history.removeAll { $0.id == report.id }
+
+        if currentReport.id == report.id {
+            if let latest = history.first {
+                currentReport = latest
+                hasActiveReport = true
+            } else {
+                currentReport = Report()
+                hasActiveReport = false
+            }
+            hasUnsavedChanges = false
+        }
+
         saveHistory()
     }
     
@@ -1693,6 +1778,9 @@ class ReportViewModel: ObservableObject {
             saveHistory()
             if let latest = history.first {
                 currentReport = latest
+                hasActiveReport = true
+            } else {
+                hasActiveReport = false
             }
             hasUnsavedChanges = false
 
@@ -1825,7 +1913,7 @@ class ReportViewModel: ObservableObject {
     }
     
     var isEmpty: Bool {
-        currentReport.isEmpty
+        !hasActiveReport || currentReport.isEmpty
     }
 
     var hasHistory: Bool {
