@@ -9,8 +9,10 @@ struct ContentView: View {
     @StateObject private var appUpdateService = AppUpdateService(owner: "Karlpogi11", repo: "pmg-report")
     @State private var showingNewReportSheet = false
     @State private var showingSettings = false
+    @State private var showingTimeEditor = false
     @State private var showingCopyAlert = false
     @State private var searchText = ""
+    @State private var timeEditorValue = Date()
     @State private var updateAlert: UpdateAlert?
     
     var filteredHistory: [Report] {
@@ -156,6 +158,13 @@ struct ContentView: View {
             .sheet(isPresented: $showingSettings) {
                 SettingsView(settings: viewModel.settings)
             }
+            .sheet(isPresented: $showingTimeEditor) {
+                TimeEditorSheet(
+                    selectedTime: $timeEditorValue,
+                    isPresented: $showingTimeEditor,
+                    onSave: applyEditedTime
+                )
+            }
             .alert("Copied!", isPresented: $showingCopyAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -215,7 +224,7 @@ struct ContentView: View {
                 appUpdateService.openAvailableUpdate()
                 updateAlert = UpdateAlert(
                     title: "Update Found",
-                    message: "Downloading version \(release.version). Install it over your current app, no uninstall required."
+                    message: "Opened installer for version \(release.version). Install over your current app, no uninstall required."
                 )
             case .upToDate:
                 let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "current"
@@ -313,10 +322,21 @@ struct ContentView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("TIME")
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                    HStack {
+                        Text("TIME")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Button(action: openTimeEditor) {
+                            Label("Edit", systemImage: "pencil")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
+                    }
                     Text(viewModel.currentReport.time)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.medium)
@@ -356,12 +376,85 @@ struct ContentView: View {
         default: return .constant("")
         }
     }
+
+    private func openTimeEditor() {
+        timeEditorValue = parseTime(from: viewModel.currentReport.time) ?? Date()
+        showingTimeEditor = true
+    }
+
+    private func applyEditedTime(_ time: Date) {
+        var report = viewModel.currentReport
+        report.time = formatTime(time)
+        viewModel.currentReport = report
+    }
+
+    private func parseTime(from text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.date(from: text)
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
 }
 
 private struct UpdateAlert: Identifiable {
     let id = UUID()
     let title: String
     let message: String
+}
+
+private struct TimeEditorSheet: View {
+    @Binding var selectedTime: Date
+    @Binding var isPresented: Bool
+    let onSave: (Date) -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Text("Edit Time")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+
+                Spacer()
+
+                Button(action: { isPresented = false }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            DatePicker(
+                "Time",
+                selection: $selectedTime,
+                displayedComponents: .hourAndMinute
+            )
+            .datePickerStyle(.field)
+
+            HStack(spacing: 12) {
+                Spacer()
+
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .buttonStyle(.bordered)
+
+                Button("Save") {
+                    onSave(selectedTime)
+                    isPresented = false
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return)
+            }
+        }
+        .padding(24)
+        .frame(width: 360)
+    }
 }
 
 // MARK: - New Report Sheet

@@ -19,6 +19,7 @@ Artifacts are written to `dist/`:
 - `dist/Report Template.app`
 - `dist/Report-Template-<version>.dmg`
 - `dist/Report-Template-<version>-installer.sh`
+- `dist/Report-Template-<version>-installer.command` (one-click)
 
 By default, the script builds for your current Mac architecture only (`arm64` on Apple Silicon, `x86_64` on Intel).  
 If you want a universal build, run:
@@ -30,6 +31,7 @@ DESTINATION="generic/platform=macOS" ./scripts/release.sh
 ## How users install
 
 - DMG route: open the DMG, drag `Report Template.app` into `Applications`.
+- One-click route: double-click `Report-Template-<version>-installer.command`, then confirm prompts.
 - Shell route:
 
 ```bash
