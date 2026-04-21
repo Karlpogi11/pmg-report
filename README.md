@@ -44,4 +44,3 @@ Output files are in `dist/`:
 
 - `Report-Template-<version>.dmg`
 - `Report-Template-<version>-installer.command`
-- `Report-Template-<version>-installer.sh`

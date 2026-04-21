@@ -199,9 +199,6 @@ private struct GitHubRelease: Decodable {
         if let installerCommand = assets.first(where: { $0.name.lowercased().hasSuffix("-installer.command") }) {
             return installerCommand.browserDownloadURL
         }
-        if let installer = assets.first(where: { $0.name.lowercased().hasSuffix("-installer.sh") }) {
-            return installer.browserDownloadURL
-        }
         if let dmg = assets.first(where: { $0.name.lowercased().hasSuffix(".dmg") }) {
             return dmg.browserDownloadURL
         }

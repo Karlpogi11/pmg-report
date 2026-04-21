@@ -1,0 +1,64 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate tag version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          APP_VERSION="$(
+            awk -F' = ' '/MARKETING_VERSION = / {
+              gsub(/;|"/, "", $2);
+              print $2;
+              exit
+            }' "Report Template/Report Template.xcodeproj/project.pbxproj"
+          )"
+
+          if [[ -z "$APP_VERSION" ]]; then
+            echo "Could not read MARKETING_VERSION from project.pbxproj." >&2
+            exit 1
+          fi
+
+          if [[ "$TAG_VERSION" != "$APP_VERSION" ]]; then
+            echo "Tag version ($TAG_VERSION) must match MARKETING_VERSION ($APP_VERSION)." >&2
+            exit 1
+          fi
+
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/release.sh
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: v${{ env.APP_VERSION }}
+          body: |
+            Install files:
+            - Report-Template-${{ env.APP_VERSION }}-installer.command (one-click, recommended)
+            - Report-Template-${{ env.APP_VERSION }}.dmg (drag to Applications)
+          generate_release_notes: true
+          overwrite_files: true
+          files: |
+            dist/Report-Template-${{ env.APP_VERSION }}-installer.command
+            dist/Report-Template-${{ env.APP_VERSION }}.dmg

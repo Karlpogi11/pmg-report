@@ -50,7 +50,6 @@ APP_DIST_PATH="$DIST_DIR/$APP_NAME"
 DMG_PATH="$DIST_DIR/${SAFE_NAME}-${SAFE_VERSION}.dmg"
 PKG_STAGE="$BUILD_DIR/dmg-stage"
 PAYLOAD_TAR="$BUILD_DIR/${SAFE_NAME}-${SAFE_VERSION}.tar.gz"
-INSTALLER_SH_PATH="$DIST_DIR/${SAFE_NAME}-${SAFE_VERSION}-installer.sh"
 INSTALLER_COMMAND_PATH="$DIST_DIR/${SAFE_NAME}-${SAFE_VERSION}-installer.command"
 BASE64_DECODE_CMD="$(decode_base64_cmd)"
 
@@ -91,9 +90,9 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH"
 
-echo "Creating self-extracting installers (.sh and one-click .command)..."
+echo "Creating one-click installer (.command)..."
 LC_ALL=C tar -C "$DIST_DIR" -czf "$PAYLOAD_TAR" "$APP_NAME"
-cat >"$INSTALLER_SH_PATH" <<EOF
+cat >"$INSTALLER_COMMAND_PATH" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -131,24 +130,19 @@ install_app() {
 extract_payload
 LC_ALL=C tar -xzf "\$TMP_DIR/payload.tar.gz" -C "\$TMP_DIR"
 install_app
-if [[ "\$0" == *.command ]]; then
-  echo
-  read -r -p "Installation complete. Press Enter to close..."
-fi
+echo
+read -r -p "Installation complete. Press Enter to close..."
 exit 0
 __PAYLOAD_BELOW__
 EOF
 
-base64 <"$PAYLOAD_TAR" >>"$INSTALLER_SH_PATH"
-chmod +x "$INSTALLER_SH_PATH"
-cp "$INSTALLER_SH_PATH" "$INSTALLER_COMMAND_PATH"
+base64 <"$PAYLOAD_TAR" >>"$INSTALLER_COMMAND_PATH"
 chmod +x "$INSTALLER_COMMAND_PATH"
 
 echo
 echo "Release artifacts created:"
 echo "  App:       $APP_DIST_PATH"
 echo "  DMG:       $DMG_PATH"
-echo "  Installer: $INSTALLER_SH_PATH"
 echo "  One-click: $INSTALLER_COMMAND_PATH"
 echo
 echo "Notes:"
