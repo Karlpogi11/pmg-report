@@ -60,6 +60,7 @@ jobs:
 
             Terminal install (latest):
             curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash -s -- --yes
           generate_release_notes: true
           overwrite_files: true
           files: |

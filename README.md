@@ -20,6 +20,12 @@ Install latest release:
 curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash
 ```
 
+Install latest release (non-interactive):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash -s -- --yes
+```
+
 Install a specific version:
 
 ```bash

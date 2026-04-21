@@ -3,7 +3,41 @@ set -euo pipefail
 
 REPO="${REPO:-Karlpogi11/pmg-report}"
 INSTALL_DIR="${INSTALL_DIR:-/Applications}"
-REQUESTED_VERSION="${1:-latest}"
+REQUESTED_VERSION="latest"
+AUTO_YES=0
+
+usage() {
+  cat <<'EOF'
+Usage: install.sh [version] [--yes]
+
+Examples:
+  install.sh
+  install.sh v1.1
+  install.sh --yes
+  install.sh v1.1 --yes
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -y|--yes)
+      AUTO_YES=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      if [[ "$REQUESTED_VERSION" != "latest" ]]; then
+        echo "Only one optional version argument is supported." >&2
+        usage
+        exit 1
+      fi
+      REQUESTED_VERSION="$1"
+      ;;
+  esac
+  shift
+done
 
 if [[ "$REQUESTED_VERSION" == "latest" ]]; then
   RELEASE_API_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -90,11 +124,21 @@ echo "Ready to install:"
 echo "  App:        $APP_NAME"
 echo "  Version:    $TAG_NAME"
 echo "  Destination:$INSTALL_DIR"
-read -r -p "Continue install? [y/N] " CONFIRM
 
-if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-  echo "Installation cancelled."
-  exit 0
+if [[ "$AUTO_YES" -ne 1 ]]; then
+  CONFIRM=""
+  if [[ -r /dev/tty ]]; then
+    printf "Continue install? [y/N] " > /dev/tty
+    IFS= read -r CONFIRM < /dev/tty || true
+  else
+    echo "No interactive terminal found. Re-run with --yes to continue non-interactively." >&2
+    exit 1
+  fi
+
+  if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+    echo "Installation cancelled."
+    exit 0
+  fi
 fi
 
 if rm -rf "$APP_TARGET" 2>/dev/null && ditto "$APP_SOURCE" "$APP_TARGET" 2>/dev/null; then
