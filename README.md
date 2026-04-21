@@ -1,48 +1,47 @@
-# Report Template (macOS)
+# PMG Report (macOS)
 
-A macOS app built with SwiftUI.
+Simple report app for macOS.
 
-## Install
+## Download
 
-### Option 1: DMG (recommended)
+- [Releases Page](https://github.com/Karlpogi11/pmg-report/releases)
 
-1. Download `Report-Template-<version>.dmg` from Releases.
-2. Open the DMG file.
-3. Drag `Report Template.app` into `Applications`.
-4. Open the app from `Applications`.
+## Install (User Friendly)
 
-### Option 2: Shell installer
+### Option 1: One-click installer (easiest)
 
-1. Download `Report-Template-<version>-installer.sh` from Releases.
-2. Run:
+1. Open [Releases Page](https://github.com/Karlpogi11/pmg-report/releases).
+2. Download `Report-Template-<version>-installer.command`.
+3. Double-click the file.
+4. Follow the prompts.
 
-```bash
-chmod +x Report-Template-<version>-installer.sh
-./Report-Template-<version>-installer.sh
-```
+### Option 2: DMG install
 
-The installer copies the app into `/Applications` by default.
+1. Download `Report-Template-<version>.dmg`.
+2. Open the DMG.
+3. Drag `Report Template.app` to `Applications`.
 
-## First launch note
+## Update app
 
-If macOS blocks first launch, open with:
+Install the newer version the same way as above.  
+No uninstall is needed.
 
-1. `Control` + click the app
+## If macOS blocks first launch
+
+1. `Control` + click `Report Template.app`
 2. Click `Open`
 3. Confirm `Open`
 
-## Build release artifacts
+## For Maintainers
 
-From repo root:
+Build release files:
 
 ```bash
 ./scripts/release.sh
 ```
 
-Artifacts are generated in `dist/`:
+Output files are in `dist/`:
 
-- `Report Template.app`
 - `Report-Template-<version>.dmg`
+- `Report-Template-<version>-installer.command`
 - `Report-Template-<version>-installer.sh`
-
-For smooth public distribution, use Apple Developer ID signing and notarization before publishing.

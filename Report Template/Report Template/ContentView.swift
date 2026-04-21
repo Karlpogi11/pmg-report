@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showingCopyAlert = false
     @State private var searchText = ""
     @State private var timeEditorValue = Date()
+    @State private var copyAlertMessage = "Report copied to clipboard"
     @State private var updateAlert: UpdateAlert?
     
     var filteredHistory: [Report] {
@@ -112,10 +113,19 @@ struct ContentView: View {
             .frame(minWidth: 250)
             .toolbar {
                 ToolbarItem(placement: .automatic) {
-                    Button(action: { viewModel.exportToExcel() }) {
-                        Label("Export", systemImage: "square.and.arrow.up")
+                    HStack(spacing: 10) {
+                        Button(action: copyAllSavedReports) {
+                            Label("Copy All", systemImage: "doc.on.doc")
+                        }
+                        .disabled(!viewModel.hasHistory)
+                        .help("Copy all saved reports as plain text grouped by date")
+
+                        Button(action: { viewModel.exportToExcel() }) {
+                            Label("Export", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(!viewModel.hasHistory)
+                        .help("Export all history to Excel")
                     }
-                    .help("Export all history to Excel")
                 }
             }
         } detail: {
@@ -168,7 +178,7 @@ struct ContentView: View {
             .alert("Copied!", isPresented: $showingCopyAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Report copied to clipboard")
+                Text(copyAlertMessage)
             }
         }
         .frame(minWidth: 1000, minHeight: 650)
@@ -282,6 +292,7 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 Button(action: {
                     viewModel.copyToClipboard()
+                    copyAlertMessage = "Report copied to clipboard"
                     showingCopyAlert = true
                 }) {
                     Label("Copy", systemImage: "doc.on.clipboard")
@@ -398,6 +409,12 @@ struct ContentView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    private func copyAllSavedReports() {
+        viewModel.copyAllHistoryToClipboardGroupedByDate()
+        copyAlertMessage = "All saved reports copied and grouped by date."
+        showingCopyAlert = true
     }
 }
 
@@ -1134,6 +1151,15 @@ class ReportViewModel: ObservableObject {
         pasteboard.clearContents()
         pasteboard.writeObjects([pasteboardItem])
     }
+
+    func copyAllHistoryToClipboardGroupedByDate() {
+        guard !history.isEmpty else { return }
+
+        let plainText = groupedHistoryPlainText()
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(plainText, forType: .string)
+    }
     
     private func makeAttributedReport(from text: String) -> NSAttributedString {
         let attributedText = NSMutableAttributedString(string: text)
@@ -1149,6 +1175,41 @@ class ReportViewModel: ObservableObject {
         }
         
         return attributedText
+    }
+
+    private func groupedHistoryPlainText() -> String {
+        let reportsByDate = Dictionary(grouping: history, by: \.date)
+        let orderedDates = orderedUniqueDates(from: history)
+        let sectionDivider = "\n\n========================================\n\n"
+
+        var sections: [String] = []
+        sections.reserveCapacity(orderedDates.count)
+
+        for date in orderedDates {
+            guard let reports = reportsByDate[date], !reports.isEmpty else { continue }
+
+            var dateSection = "DATE: \(date)"
+            for report in reports {
+                let reportBody = report.formattedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                dateSection += "\n\n\(reportBody)"
+            }
+            sections.append(dateSection)
+        }
+
+        return sections.joined(separator: sectionDivider)
+    }
+
+    private func orderedUniqueDates(from reports: [Report]) -> [String] {
+        var seenDates = Set<String>()
+        var orderedDates: [String] = []
+
+        for report in reports {
+            if seenDates.insert(report.date).inserted {
+                orderedDates.append(report.date)
+            }
+        }
+
+        return orderedDates
     }
     
     func exportToExcel() {
@@ -1205,6 +1266,10 @@ class ReportViewModel: ObservableObject {
     
     var isEmpty: Bool {
         currentReport.isEmpty
+    }
+
+    var hasHistory: Bool {
+        !history.isEmpty
     }
     
     private func saveHistory() {
