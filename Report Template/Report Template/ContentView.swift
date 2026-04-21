@@ -74,38 +74,7 @@ struct ContentView: View {
                     .frame(maxHeight: .infinity)
                 } else {
                     List(filteredHistory) { report in
-                        Button(action: {
-                            viewModel.loadReport(report)
-                        }) {
-                            HStack(spacing: 12) {
-                                // Icon
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.blue.opacity(0.1))
-                                        .frame(width: 44, height: 44)
-                                    Image(systemName: "doc.text.fill")
-                                        .foregroundStyle(.blue)
-                                }
-                                
-                                // Content
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(report.date)
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .fontWeight(.semibold)
-                                    Text(report.time)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.plain)
+                        historyRow(for: report)
                         .contextMenu {
                             Button(role: .destructive) {
                                 viewModel.deleteReport(report)
@@ -202,7 +171,6 @@ struct ContentView: View {
                 Text(copyAlertMessage)
             }
         }
-        .frame(minWidth: 1000, minHeight: 650)
         .task {
             _ = await appUpdateService.checkForUpdates()
         }
@@ -240,6 +208,55 @@ struct ContentView: View {
             return "Download and install version \(version)"
         }
         return "Check GitHub releases for a newer version"
+    }
+
+    private func historyRow(for report: Report) -> some View {
+        let isSelected = report.id == viewModel.currentReport.id
+
+        return Button(action: {
+            viewModel.loadReport(report)
+        }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            isSelected
+                            ? Color.accentColor.opacity(0.24)
+                            : Color(nsColor: .controlBackgroundColor)
+                        )
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "doc.text.fill")
+                        .foregroundColor(isSelected ? .accentColor : .secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(report.date)
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.semibold)
+                    Text(report.time)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(
+                        isSelected
+                        ? .accentColor
+                        : Color(nsColor: .tertiaryLabelColor)
+                    )
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
     }
     
     private func handleUpdateButtonTap() {
