@@ -6,10 +6,12 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @StateObject private var viewModel = ReportViewModel()
+    @StateObject private var appUpdateService = AppUpdateService(owner: "Karlpogi11", repo: "pmg-report")
     @State private var showingNewReportSheet = false
     @State private var showingSettings = false
     @State private var showingCopyAlert = false
     @State private var searchText = ""
+    @State private var updateAlert: UpdateAlert?
     
     var filteredHistory: [Report] {
         if searchText.isEmpty {
@@ -131,6 +133,12 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     HStack(spacing: 12) {
+                        Button(action: handleUpdateButtonTap) {
+                            Label(updateButtonTitle, systemImage: updateButtonIcon)
+                        }
+                        .disabled(appUpdateService.isChecking)
+                        .help(updateButtonHelpText)
+                        
                         Button(action: { showingSettings = true }) {
                             Label("Settings", systemImage: "gearshape")
                         }
@@ -155,6 +163,75 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 1000, minHeight: 650)
+        .task {
+            _ = await appUpdateService.checkForUpdates()
+        }
+        .alert(item: $updateAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+    
+    private var updateButtonTitle: String {
+        if appUpdateService.isChecking {
+            return "Checking..."
+        }
+        if let version = appUpdateService.availableVersion {
+            return "Update \(version)"
+        }
+        return "Check Update"
+    }
+    
+    private var updateButtonIcon: String {
+        if appUpdateService.isChecking {
+            return "arrow.triangle.2.circlepath"
+        }
+        if appUpdateService.availableVersion != nil {
+            return "arrow.down.circle"
+        }
+        return "arrow.triangle.2.circlepath"
+    }
+    
+    private var updateButtonHelpText: String {
+        if let version = appUpdateService.availableVersion {
+            return "Download and install version \(version)"
+        }
+        return "Check GitHub releases for a newer version"
+    }
+    
+    private func handleUpdateButtonTap() {
+        Task {
+            if appUpdateService.availableVersion != nil {
+                appUpdateService.openAvailableUpdate()
+                return
+            }
+            
+            let result = await appUpdateService.checkForUpdates()
+            switch result {
+            case .updateAvailable(let release):
+                appUpdateService.openAvailableUpdate()
+                updateAlert = UpdateAlert(
+                    title: "Update Found",
+                    message: "Downloading version \(release.version). Install it over your current app, no uninstall required."
+                )
+            case .upToDate:
+                let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "current"
+                updateAlert = UpdateAlert(
+                    title: "Up To Date",
+                    message: "You are already on version \(current)."
+                )
+            case .failed(let message):
+                updateAlert = UpdateAlert(
+                    title: "Update Check Failed",
+                    message: message
+                )
+            case .idle, .checking:
+                break
+            }
+        }
     }
     
     private var headerCard: some View {
@@ -279,6 +356,12 @@ struct ContentView: View {
         default: return .constant("")
         }
     }
+}
+
+private struct UpdateAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
 }
 
 // MARK: - New Report Sheet
