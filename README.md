@@ -36,8 +36,8 @@ curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.
 
 ## Update app
 
-Install the newer version the same way as above.
-No uninstall is needed.
+Use `Check Update` inside the app toolbar (Sparkle).
+Manual install from Releases still works; no uninstall is needed.
 
 ## If macOS blocks first launch
 
@@ -56,3 +56,17 @@ Build release files:
 Output files are in `dist/`:
 
 - `Report-Template-<version>.dmg`
+- `appcast.xml` (signed Sparkle feed)
+
+For production-ready releases (Developer ID signing + notarization), run:
+
+```bash
+PRODUCTION_RELEASE=1 \
+DEVELOPER_ID_APP_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_KEYCHAIN_PROFILE="karlapp-notary" \
+NOTARY_TEAM_ID="TEAMID" \
+SPARKLE_ALLOW_KEY_GENERATION=0 \
+./scripts/release.sh
+```
+
+See maintainer details in [RELEASE.md](./RELEASE.md).

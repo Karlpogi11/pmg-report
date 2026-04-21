@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @StateObject private var viewModel = ReportViewModel()
-    @StateObject private var appUpdateService = AppUpdateService(owner: "Karlpogi11", repo: "pmg-report")
+    @ObservedObject private var appUpdateService: AppUpdateService
     @AppStorage("didDismissBackupReminder") private var didDismissBackupReminder = false
     @State private var showingNewReportSheet = false
     @State private var showingSettings = false
@@ -15,7 +15,10 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var timeEditorValue = Date()
     @State private var copyAlertMessage = "Report copied to clipboard"
-    @State private var updateAlert: UpdateAlert?
+
+    init(appUpdateService: AppUpdateService) {
+        self.appUpdateService = appUpdateService
+    }
     
     var filteredHistory: [Report] {
         if searchText.isEmpty {
@@ -138,7 +141,7 @@ struct ContentView: View {
                         Button(action: handleUpdateButtonTap) {
                             Label(updateButtonTitle, systemImage: updateButtonIcon)
                         }
-                        .disabled(appUpdateService.isChecking)
+                        .disabled(!appUpdateService.canCheckForUpdates)
                         .help(updateButtonHelpText)
                         
                         Button(action: { showingSettings = true }) {
@@ -179,43 +182,18 @@ struct ContentView: View {
                 Text(copyAlertMessage)
             }
         }
-        .task {
-            _ = await appUpdateService.checkForUpdates()
-        }
-        .alert(item: $updateAlert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
-        }
     }
     
     private var updateButtonTitle: String {
-        if appUpdateService.isChecking {
-            return "Checking..."
-        }
-        if let version = appUpdateService.availableVersion {
-            return "Update \(version)"
-        }
         return "Check Update"
     }
     
     private var updateButtonIcon: String {
-        if appUpdateService.isChecking {
-            return "arrow.triangle.2.circlepath"
-        }
-        if appUpdateService.availableVersion != nil {
-            return "arrow.down.circle"
-        }
         return "arrow.triangle.2.circlepath"
     }
     
     private var updateButtonHelpText: String {
-        if let version = appUpdateService.availableVersion {
-            return "Download and install version \(version)"
-        }
-        return "Check GitHub releases for a newer version"
+        return "Check Sparkle feed for updates"
     }
 
     private func historyRow(for report: Report) -> some View {
@@ -269,35 +247,7 @@ struct ContentView: View {
     }
     
     private func handleUpdateButtonTap() {
-        Task {
-            if appUpdateService.availableVersion != nil {
-                appUpdateService.openAvailableUpdate()
-                return
-            }
-            
-            let result = await appUpdateService.checkForUpdates()
-            switch result {
-            case .updateAvailable(let release):
-                appUpdateService.openAvailableUpdate()
-                updateAlert = UpdateAlert(
-                    title: "Update Found",
-                    message: "Opened installer for version \(release.version). Install over your current app, no uninstall required."
-                )
-            case .upToDate:
-                let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "current"
-                updateAlert = UpdateAlert(
-                    title: "Up To Date",
-                    message: "You are already on version \(current)."
-                )
-            case .failed(let message):
-                updateAlert = UpdateAlert(
-                    title: "Update Check Failed",
-                    message: message
-                )
-            case .idle, .checking:
-                break
-            }
-        }
+        appUpdateService.checkForUpdates()
     }
     
     private var headerCard: some View {
@@ -501,17 +451,7 @@ struct ContentView: View {
     }
     
     private func binding(for fieldId: String) -> Binding<String> {
-        switch fieldId {
-        case "partsArrived": return $viewModel.currentReport.partsArrived
-        case "mailIn": return $viewModel.currentReport.mailIn
-        case "qslReturned": return $viewModel.currentReport.qslReturned
-        case "stockIn": return $viewModel.currentReport.stockIn
-        case "stockOut": return $viewModel.currentReport.stockOut
-        case "safekeeping": return $viewModel.currentReport.safekeeping
-        case "kbbShipout": return $viewModel.currentReport.kbbShipout
-        case "additionalNotes": return $viewModel.currentReport.additionalNotes
-        default: return .constant("")
-        }
+        viewModel.binding(for: fieldId)
     }
 
     private func openTimeEditor() {
@@ -543,12 +483,6 @@ struct ContentView: View {
         showingCopyAlert = true
         didDismissBackupReminder = true
     }
-}
-
-private struct UpdateAlert: Identifiable {
-    let id = UUID()
-    let title: String
-    let message: String
 }
 
 private struct TimeEditorSheet: View {
@@ -1051,7 +985,6 @@ struct ModernReportSection: View {
     let title: String
     @Binding var text: String
     let icon: String
-    @State private var editorHeight: CGFloat = 100
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1065,240 +998,13 @@ struct ModernReportSection: View {
                     .textCase(.uppercase)
             }
             
-            LinkAwareTextEditor(text: $text, dynamicHeight: $editorHeight)
-                .frame(height: max(100, editorHeight))
+            TextEditor(text: $text)
+                .font(.system(.body, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 120)
                 .background(Color(nsColor: .textBackgroundColor))
                 .cornerRadius(10)
         }
-    }
-}
-
-private struct LinkAwareTextEditor: NSViewRepresentable {
-    @Binding var text: String
-    @Binding var dynamicHeight: CGFloat
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let textStorage = NSTextStorage()
-        let layoutManager = NSLayoutManager()
-        textStorage.addLayoutManager(layoutManager)
-
-        let textContainer = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        textContainer.widthTracksTextView = true
-        layoutManager.addTextContainer(textContainer)
-
-        let textView = LinkAwareNSTextView(frame: .zero, textContainer: textContainer)
-        textView.minSize = NSSize(width: 0, height: 0)
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.isVerticallyResizable = false
-        textView.isHorizontallyResizable = false
-        textView.autoresizingMask = NSView.AutoresizingMask.width
-        textContainer.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-
-        textView.delegate = context.coordinator
-        textView.isEditable = true
-        textView.isSelectable = true
-        textView.isRichText = true
-        textView.importsGraphics = false
-        textView.allowsUndo = true
-        textView.drawsBackground = false
-        textView.usesFindBar = true
-        textView.isAutomaticLinkDetectionEnabled = true
-        textView.linkTextAttributes = [
-            NSAttributedString.Key.foregroundColor: NSColor.systemBlue,
-            NSAttributedString.Key.underlineStyle: NSUnderlineStyle.single.rawValue
-        ]
-        textView.textContainerInset = NSSize(width: 8, height: 10)
-        textView.textContainer?.lineFragmentPadding = 0
-
-        let scrollView = NSScrollView()
-        scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = false
-        scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = false
-        scrollView.drawsBackground = false
-        scrollView.documentView = textView
-
-        textView.string = text
-        context.coordinator.applyLinkStyle(in: textView)
-        context.coordinator.recalculateHeight(for: textView)
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
-        if context.coordinator.isApplyingStyle {
-            return
-        }
-
-        if textView.string != text {
-            textView.string = text
-            context.coordinator.applyLinkStyle(in: textView)
-        }
-
-        context.coordinator.recalculateHeight(for: textView)
-    }
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: LinkAwareTextEditor
-        var isApplyingStyle = false
-
-        init(_ parent: LinkAwareTextEditor) {
-            self.parent = parent
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            parent.text = textView.string
-            applyLinkStyle(in: textView)
-            recalculateHeight(for: textView)
-        }
-
-        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
-            guard let url = link as? URL else { return false }
-            NSWorkspace.shared.open(url)
-            return true
-        }
-
-        func applyLinkStyle(in textView: NSTextView) {
-            guard let textStorage = textView.textStorage else { return }
-
-            isApplyingStyle = true
-            defer { isApplyingStyle = false }
-
-            let selectedRanges = textView.selectedRanges
-            let fullRange = NSRange(location: 0, length: textStorage.length)
-            let baseFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-
-            textStorage.beginEditing()
-            textStorage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
-            textStorage.addAttribute(.font, value: baseFont, range: fullRange)
-
-            if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
-                detector.enumerateMatches(in: textStorage.string, options: [], range: fullRange) { match, _, _ in
-                    guard let match, let url = match.url else { return }
-                    textStorage.addAttributes(
-                        [
-                            .link: url,
-                            .foregroundColor: NSColor.systemBlue,
-                            .underlineStyle: NSUnderlineStyle.single.rawValue
-                        ],
-                        range: match.range
-                    )
-                }
-            }
-
-            // Preserve and style any existing pasted hyperlink attributes (rich text links).
-            textStorage.enumerateAttribute(.link, in: fullRange, options: []) { value, range, _ in
-                guard value != nil else { return }
-                textStorage.addAttributes(
-                    [
-                        .foregroundColor: NSColor.systemBlue,
-                        .underlineStyle: NSUnderlineStyle.single.rawValue
-                    ],
-                    range: range
-                )
-            }
-            textStorage.endEditing()
-
-            textView.selectedRanges = selectedRanges
-        }
-
-        func recalculateHeight(for textView: NSTextView) {
-            guard let textContainer = textView.textContainer,
-                  let layoutManager = textView.layoutManager else {
-                return
-            }
-
-            let targetWidth = max(textView.bounds.width, 1)
-            textContainer.containerSize = NSSize(width: targetWidth, height: .greatestFiniteMagnitude)
-            layoutManager.ensureLayout(for: textContainer)
-
-            let usedRect = layoutManager.usedRect(for: textContainer)
-            let insetHeight = textView.textContainerInset.height * 2
-            let measured = max(100, ceil(usedRect.height + insetHeight + 2))
-
-            if abs(parent.dynamicHeight - measured) > 0.5 {
-                DispatchQueue.main.async {
-                    self.parent.dynamicHeight = measured
-                }
-            }
-        }
-    }
-}
-
-private final class LinkAwareNSTextView: NSTextView {
-    override func paste(_ sender: Any?) {
-        if let richLinkContent = preferredPastedLinkContent() {
-            insertAttributed(richLinkContent)
-            return
-        }
-        super.paste(sender)
-    }
-
-    private func preferredPastedLinkContent() -> NSAttributedString? {
-        let pasteboard = NSPasteboard.general
-
-        if let attributed = attributedString(from: pasteboard, type: .rtfd, documentType: .rtfd),
-           containsLink(in: attributed) {
-            return attributed
-        }
-
-        if let attributed = attributedString(from: pasteboard, type: .rtf, documentType: .rtf),
-           containsLink(in: attributed) {
-            return attributed
-        }
-
-        if let attributed = attributedString(from: pasteboard, type: .html, documentType: .html),
-           containsLink(in: attributed) {
-            return attributed
-        }
-
-        if let displayText = pasteboard.string(forType: .string),
-           !displayText.isEmpty,
-           let rawURL = pasteboard.string(forType: .URL) ?? pasteboard.string(forType: NSPasteboard.PasteboardType("public.url")),
-           let url = URL(string: rawURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            let attributed = NSMutableAttributedString(string: displayText)
-            attributed.addAttribute(.link, value: url, range: NSRange(location: 0, length: attributed.length))
-            return attributed
-        }
-
-        return nil
-    }
-
-    private func attributedString(
-        from pasteboard: NSPasteboard,
-        type: NSPasteboard.PasteboardType,
-        documentType: NSAttributedString.DocumentType
-    ) -> NSAttributedString? {
-        guard let data = pasteboard.data(forType: type) else { return nil }
-        return try? NSAttributedString(
-            data: data,
-            options: [.documentType: documentType],
-            documentAttributes: nil
-        )
-    }
-
-    private func containsLink(in attributed: NSAttributedString) -> Bool {
-        var hasLink = false
-        let fullRange = NSRange(location: 0, length: attributed.length)
-        attributed.enumerateAttribute(.link, in: fullRange, options: []) { value, _, stop in
-            if value != nil {
-                hasLink = true
-                stop.pointee = true
-            }
-        }
-        return hasLink
-    }
-
-    private func insertAttributed(_ attributed: NSAttributedString) {
-        let range = selectedRange()
-        guard shouldChangeText(in: range, replacementString: attributed.string) else { return }
-        textStorage?.replaceCharacters(in: range, with: attributed)
-        didChangeText()
     }
 }
 
@@ -1317,6 +1023,23 @@ struct Report: Identifiable, Codable {
     var kbbShipout: String
     var additionalNotes: String
     var createdAt: Date
+    var customFields: [String: String]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case date
+        case time
+        case partsArrived
+        case mailIn
+        case qslReturned
+        case stockIn
+        case stockOut
+        case safekeeping
+        case kbbShipout
+        case additionalNotes
+        case createdAt
+        case customFields
+    }
     
     init(date: Date = Date(), time: String? = nil) {
         let dateFormatter = DateFormatter()
@@ -1334,6 +1057,41 @@ struct Report: Identifiable, Codable {
         self.kbbShipout = ""
         self.additionalNotes = "Checked parts pending, parts inventory"
         self.createdAt = date
+        self.customFields = [:]
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        date = try container.decode(String.self, forKey: .date)
+        time = try container.decode(String.self, forKey: .time)
+        partsArrived = try container.decodeIfPresent(String.self, forKey: .partsArrived) ?? ""
+        mailIn = try container.decodeIfPresent(String.self, forKey: .mailIn) ?? ""
+        qslReturned = try container.decodeIfPresent(String.self, forKey: .qslReturned) ?? ""
+        stockIn = try container.decodeIfPresent(String.self, forKey: .stockIn) ?? ""
+        stockOut = try container.decodeIfPresent(String.self, forKey: .stockOut) ?? ""
+        safekeeping = try container.decodeIfPresent(String.self, forKey: .safekeeping) ?? ""
+        kbbShipout = try container.decodeIfPresent(String.self, forKey: .kbbShipout) ?? ""
+        additionalNotes = try container.decodeIfPresent(String.self, forKey: .additionalNotes) ?? ""
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        customFields = try container.decodeIfPresent([String: String].self, forKey: .customFields) ?? [:]
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(date, forKey: .date)
+        try container.encode(time, forKey: .time)
+        try container.encode(partsArrived, forKey: .partsArrived)
+        try container.encode(mailIn, forKey: .mailIn)
+        try container.encode(qslReturned, forKey: .qslReturned)
+        try container.encode(stockIn, forKey: .stockIn)
+        try container.encode(stockOut, forKey: .stockOut)
+        try container.encode(safekeeping, forKey: .safekeeping)
+        try container.encode(kbbShipout, forKey: .kbbShipout)
+        try container.encode(additionalNotes, forKey: .additionalNotes)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(customFields, forKey: .customFields)
     }
     
     var formattedDate: String {
@@ -1352,15 +1110,56 @@ struct Report: Identifiable, Codable {
         var output = ""
         output += "\(date)\n"
         output += "\(time)\n\n"
-        output += "PARTS ARRIVED\n\(partsArrived)\n\n"
-        output += "MAIL-IN\n\(mailIn)\n\n"
-        output += "QSL RETURNED\n\(qslReturned)\n\n"
-        output += "STOCK-IN\n\(stockIn)\n\n"
-        output += "STOCK-OUT\n\(stockOut)\n\n"
-        output += "SAFEKEEPING\n\(safekeeping)\n\n"
-        output += "KBB SHIPOUT\n\(kbbShipout)\n\n"
-        output += "OTHERS\n\(additionalNotes)\n"
+        output += "PARTS ARRIVED\n\(value(for: "partsArrived"))\n\n"
+        output += "MAIL-IN\n\(value(for: "mailIn"))\n\n"
+        output += "QSL RETURNED\n\(value(for: "qslReturned"))\n\n"
+        output += "STOCK-IN\n\(value(for: "stockIn"))\n\n"
+        output += "STOCK-OUT\n\(value(for: "stockOut"))\n\n"
+        output += "SAFEKEEPING\n\(value(for: "safekeeping"))\n\n"
+        output += "KBB SHIPOUT\n\(value(for: "kbbShipout"))\n\n"
+        output += "OTHERS\n\(value(for: "additionalNotes"))\n"
         return output
+    }
+
+    func value(for fieldID: String) -> String {
+        switch fieldID {
+        case "partsArrived": return partsArrived
+        case "mailIn": return mailIn
+        case "qslReturned": return qslReturned
+        case "stockIn": return stockIn
+        case "stockOut": return stockOut
+        case "safekeeping": return safekeeping
+        case "kbbShipout": return kbbShipout
+        case "additionalNotes": return additionalNotes
+        default: return customFields[fieldID] ?? ""
+        }
+    }
+
+    mutating func setValue(_ value: String, for fieldID: String) {
+        switch fieldID {
+        case "partsArrived":
+            partsArrived = value
+        case "mailIn":
+            mailIn = value
+        case "qslReturned":
+            qslReturned = value
+        case "stockIn":
+            stockIn = value
+        case "stockOut":
+            stockOut = value
+        case "safekeeping":
+            safekeeping = value
+        case "kbbShipout":
+            kbbShipout = value
+        case "additionalNotes":
+            additionalNotes = value
+        default:
+            if value.isEmpty {
+                customFields.removeValue(forKey: fieldID)
+            } else {
+                customFields[fieldID] = value
+            }
+        }
     }
     
     var isEmpty: Bool {
@@ -1371,7 +1170,8 @@ struct Report: Identifiable, Codable {
         stockOut.isEmpty &&
         safekeeping.isEmpty &&
         kbbShipout.isEmpty &&
-        additionalNotes.isEmpty
+        additionalNotes.isEmpty &&
+        customFields.values.allSatisfy { $0.isEmpty }
     }
 }
 
@@ -1398,6 +1198,17 @@ private struct ReportBackupPackage: Codable {
 // MARK: - Report Settings
 
 class ReportSettings: ObservableObject {
+    static let defaultFields: [ReportField] = [
+        ReportField(id: "partsArrived", name: "PARTS ARRIVED", icon: "cube.box.fill", isCore: true),
+        ReportField(id: "mailIn", name: "MAIL-IN", icon: "envelope.fill", isCore: true),
+        ReportField(id: "qslReturned", name: "QSL RETURNED", icon: "arrow.turn.up.right", isCore: true),
+        ReportField(id: "stockIn", name: "STOCK-IN", icon: "archivebox.fill", isCore: true),
+        ReportField(id: "stockOut", name: "STOCK-OUT", icon: "shippingbox.fill", isCore: true),
+        ReportField(id: "safekeeping", name: "SAFEKEEPING", icon: "lock.fill", isCore: true),
+        ReportField(id: "kbbShipout", name: "KBB SHIPOUT", icon: "airplane", isCore: true),
+        ReportField(id: "additionalNotes", name: "ADDITIONAL NOTES", icon: "note.text", isCore: true)
+    ]
+
     @Published var fields: [ReportField] = []
     
     private let saveKey = "reportSettings"
@@ -1408,20 +1219,12 @@ class ReportSettings: ObservableObject {
     
     private func loadSettings() {
         if let data = UserDefaults.standard.data(forKey: saveKey),
-           let decoded = try? JSONDecoder().decode([ReportField].self, from: data) {
+           let decoded = try? JSONDecoder().decode([ReportField].self, from: data),
+           !decoded.isEmpty {
             fields = decoded
         } else {
-            // Default fields
-            fields = [
-                ReportField(id: "partsArrived", name: "PARTS ARRIVED", icon: "cube.box.fill", isCore: true),
-                ReportField(id: "mailIn", name: "MAIL-IN", icon: "envelope.fill", isCore: true),
-                ReportField(id: "qslReturned", name: "QSL RETURNED", icon: "arrow.turn.up.right", isCore: true),
-                ReportField(id: "stockIn", name: "STOCK-IN", icon: "archivebox.fill", isCore: true),
-                ReportField(id: "stockOut", name: "STOCK-OUT", icon: "shippingbox.fill", isCore: true),
-                ReportField(id: "safekeeping", name: "SAFEKEEPING", icon: "lock.fill", isCore: true),
-                ReportField(id: "kbbShipout", name: "KBB SHIPOUT", icon: "airplane", isCore: true),
-                ReportField(id: "additionalNotes", name: "ADDITIONAL NOTES", icon: "note.text", isCore: true)
-            ]
+            fields = Self.defaultFields
+            saveSettings()
         }
     }
     
@@ -1503,6 +1306,17 @@ class ReportViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    func binding(for fieldID: String) -> Binding<String> {
+        Binding(
+            get: { self.currentReport.value(for: fieldID) },
+            set: { newValue in
+                var report = self.currentReport
+                report.setValue(newValue, for: fieldID)
+                self.currentReport = report
+            }
+        )
+    }
     
     func createNewReport(date: Date, time: String? = nil) {
         saveCurrentReport()
@@ -1557,7 +1371,7 @@ class ReportViewModel: ObservableObject {
     }
     
     func copyToClipboard() {
-        let attributedText = makeAttributedReport(from: currentReport.formattedOutput)
+        let attributedText = makeAttributedReport(from: formattedOutput(for: currentReport))
         writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
     }
 
@@ -1700,7 +1514,7 @@ class ReportViewModel: ObservableObject {
 
             var dateSection = "DATE: \(date)"
             for report in reports {
-                let reportBody = report.formattedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                let reportBody = formattedOutput(for: report).trimmingCharacters(in: .whitespacesAndNewlines)
                 dateSection += "\n\n\(reportBody)"
             }
             sections.append(dateSection)
@@ -1720,6 +1534,21 @@ class ReportViewModel: ObservableObject {
         }
 
         return orderedDates
+    }
+
+    private func formattedOutput(for report: Report) -> String {
+        let fieldsToRender = settings.fields.isEmpty ? ReportSettings.defaultFields : settings.fields
+
+        var output = "\(report.date)\n"
+        output += "\(report.time)\n\n"
+
+        for (index, field) in fieldsToRender.enumerated() {
+            output += "\(field.name)\n"
+            output += "\(report.value(for: field.id))"
+            output += index == fieldsToRender.count - 1 ? "\n" : "\n\n"
+        }
+
+        return output
     }
 
     private func writeBackupPackage(to url: URL) {
@@ -1929,7 +1758,17 @@ class ReportViewModel: ObservableObject {
     private func loadHistory() {
         if let data = UserDefaults.standard.data(forKey: saveKey),
            let decoded = try? JSONDecoder().decode([Report].self, from: data) {
-            history = decoded
+            history = sortedReports(decoded)
+            if let latest = history.first {
+                currentReport = latest
+                hasActiveReport = true
+            } else {
+                currentReport = Report()
+                hasActiveReport = false
+            }
+        } else {
+            currentReport = Report()
+            hasActiveReport = false
         }
     }
 }
@@ -1937,5 +1776,5 @@ class ReportViewModel: ObservableObject {
 // MARK: - Preview
 
 #Preview {
-    ContentView()
+    ContentView(appUpdateService: AppUpdateService())
 }

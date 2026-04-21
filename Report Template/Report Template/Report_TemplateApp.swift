@@ -10,6 +10,8 @@ import SwiftData
 
 @main
 struct Report_TemplateApp: App {
+    @StateObject private var appUpdateService = AppUpdateService()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -25,7 +27,7 @@ struct Report_TemplateApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(appUpdateService: appUpdateService)
         }
         .modelContainer(sharedModelContainer)
     }
