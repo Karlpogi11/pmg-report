@@ -901,13 +901,111 @@ struct ModernReportSection: View {
                     .textCase(.uppercase)
             }
             
-            TextEditor(text: $text)
-                .font(.system(.body, design: .monospaced))
+            LinkAwareTextEditor(text: $text)
                 .frame(minHeight: 100)
-                .scrollContentBackground(.hidden)
-                .padding(12)
                 .background(Color(nsColor: .textBackgroundColor))
                 .cornerRadius(10)
+        }
+    }
+}
+
+private struct LinkAwareTextEditor: NSViewRepresentable {
+    @Binding var text: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        guard let textView = scrollView.documentView as? NSTextView else {
+            return scrollView
+        }
+
+        textView.delegate = context.coordinator
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.drawsBackground = false
+        textView.usesFindBar = true
+        textView.isAutomaticLinkDetectionEnabled = true
+        textView.linkTextAttributes = [
+            .foregroundColor: NSColor.systemBlue,
+            .underlineStyle: NSUnderlineStyle.single.rawValue
+        ]
+        textView.textContainerInset = NSSize(width: 8, height: 10)
+
+        textView.string = text
+        context.coordinator.applyLinkStyle(in: textView)
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        if context.coordinator.isApplyingStyle {
+            return
+        }
+
+        if textView.string != text {
+            textView.string = text
+            context.coordinator.applyLinkStyle(in: textView)
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: LinkAwareTextEditor
+        var isApplyingStyle = false
+
+        init(_ parent: LinkAwareTextEditor) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            applyLinkStyle(in: textView)
+        }
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            guard let url = link as? URL else { return false }
+            NSWorkspace.shared.open(url)
+            return true
+        }
+
+        func applyLinkStyle(in textView: NSTextView) {
+            guard let textStorage = textView.textStorage else { return }
+
+            isApplyingStyle = true
+            defer { isApplyingStyle = false }
+
+            let selectedRanges = textView.selectedRanges
+            let fullRange = NSRange(location: 0, length: textStorage.length)
+            let baseFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+
+            textStorage.beginEditing()
+            textStorage.removeAttribute(.link, range: fullRange)
+            textStorage.removeAttribute(.underlineStyle, range: fullRange)
+            textStorage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+            textStorage.addAttribute(.font, value: baseFont, range: fullRange)
+
+            if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+                detector.enumerateMatches(in: textStorage.string, options: [], range: fullRange) { match, _, _ in
+                    guard let match, let url = match.url else { return }
+                    textStorage.addAttributes(
+                        [
+                            .link: url,
+                            .foregroundColor: NSColor.systemBlue,
+                            .underlineStyle: NSUnderlineStyle.single.rawValue
+                        ],
+                        range: match.range
+                    )
+                }
+            }
+            textStorage.endEditing()
+
+            textView.selectedRanges = selectedRanges
         }
     }
 }
