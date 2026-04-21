@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @StateObject private var viewModel = ReportViewModel()
     @StateObject private var appUpdateService = AppUpdateService(owner: "Karlpogi11", repo: "pmg-report")
+    @AppStorage("didDismissBackupReminder") private var didDismissBackupReminder = false
     @State private var showingNewReportSheet = false
     @State private var showingSettings = false
     @State private var showingTimeEditor = false
@@ -51,6 +52,12 @@ struct ContentView: View {
                 .cornerRadius(10)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+
+                if viewModel.hasHistory && !didDismissBackupReminder {
+                    backupReminderBanner
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                }
                 
                 Divider()
                 
@@ -166,7 +173,13 @@ struct ContentView: View {
                 NewReportSheet(viewModel: viewModel, isPresented: $showingNewReportSheet)
             }
             .sheet(isPresented: $showingSettings) {
-                SettingsView(settings: viewModel.settings)
+                SettingsView(
+                    settings: viewModel.settings,
+                    hasHistory: viewModel.hasHistory,
+                    onCopyAll: copyAllSavedReports,
+                    onExportBackup: { viewModel.exportBackup() },
+                    onImportBackup: { viewModel.importBackup() }
+                )
             }
             .sheet(isPresented: $showingTimeEditor) {
                 TimeEditorSheet(
@@ -313,6 +326,50 @@ struct ContentView: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(16)
     }
+
+    private var backupReminderBanner: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "externaldrive.badge.exclamationmark")
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Backup your reports")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("Deleting the app removes local data. Copy or export your reports before uninstalling.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 6)
+
+                Button(action: { didDismissBackupReminder = true }) {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 8) {
+                Button("Copy All") {
+                    copyAllSavedReports()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Export Backup") {
+                    viewModel.exportBackup()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(12)
+    }
     
     private var formCard: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -415,6 +472,7 @@ struct ContentView: View {
         viewModel.copyAllHistoryToClipboardGroupedByDate()
         copyAlertMessage = "All saved reports copied and grouped by date."
         showingCopyAlert = true
+        didDismissBackupReminder = true
     }
 }
 
@@ -581,6 +639,10 @@ struct NewReportSheet: View {
 
 struct SettingsView: View {
     @ObservedObject var settings: ReportSettings
+    let hasHistory: Bool
+    let onCopyAll: () -> Void
+    let onExportBackup: () -> Void
+    let onImportBackup: () -> Void
     @Environment(\.dismiss) var dismiss
     @State private var editingField: ReportField?
     @State private var showingAddField = false
@@ -639,6 +701,38 @@ struct SettingsView: View {
                             .cornerRadius(10)
                         }
                         .buttonStyle(.plain)
+                    }
+                    .padding(20)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(12)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Backup & Restore")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+
+                        Text("Deleting the app removes local data. Copy or export reports before uninstalling.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 10) {
+                            Button(action: onCopyAll) {
+                                Label("Copy All", systemImage: "doc.on.doc")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!hasHistory)
+
+                            Button(action: onExportBackup) {
+                                Label("Export Backup", systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!hasHistory)
+
+                            Button(action: onImportBackup) {
+                                Label("Import Backup", systemImage: "square.and.arrow.down")
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                     .padding(20)
                     .background(Color(nsColor: .controlBackgroundColor))
@@ -917,25 +1011,45 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return scrollView
-        }
+        let textStorage = NSTextStorage()
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+
+        let textContainer = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        textContainer.widthTracksTextView = true
+        layoutManager.addTextContainer(textContainer)
+
+        let textView = LinkAwareNSTextView(frame: .zero, textContainer: textContainer)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = NSView.AutoresizingMask.width
+        textContainer.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
 
         textView.delegate = context.coordinator
         textView.isEditable = true
         textView.isSelectable = true
-        textView.isRichText = false
+        textView.isRichText = true
         textView.importsGraphics = false
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.usesFindBar = true
         textView.isAutomaticLinkDetectionEnabled = true
         textView.linkTextAttributes = [
-            .foregroundColor: NSColor.systemBlue,
-            .underlineStyle: NSUnderlineStyle.single.rawValue
+            NSAttributedString.Key.foregroundColor: NSColor.systemBlue,
+            NSAttributedString.Key.underlineStyle: NSUnderlineStyle.single.rawValue
         ]
         textView.textContainerInset = NSSize(width: 8, height: 10)
+        textView.textContainer?.lineFragmentPadding = 0
+
+        let scrollView = NSScrollView()
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        scrollView.documentView = textView
 
         textView.string = text
         context.coordinator.applyLinkStyle(in: textView)
@@ -985,8 +1099,6 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
             let baseFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
             textStorage.beginEditing()
-            textStorage.removeAttribute(.link, range: fullRange)
-            textStorage.removeAttribute(.underlineStyle, range: fullRange)
             textStorage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
             textStorage.addAttribute(.font, value: baseFont, range: fullRange)
 
@@ -1003,10 +1115,94 @@ private struct LinkAwareTextEditor: NSViewRepresentable {
                     )
                 }
             }
+
+            // Preserve and style any existing pasted hyperlink attributes (rich text links).
+            textStorage.enumerateAttribute(.link, in: fullRange, options: []) { value, range, _ in
+                guard value != nil else { return }
+                textStorage.addAttributes(
+                    [
+                        .foregroundColor: NSColor.systemBlue,
+                        .underlineStyle: NSUnderlineStyle.single.rawValue
+                    ],
+                    range: range
+                )
+            }
             textStorage.endEditing()
 
             textView.selectedRanges = selectedRanges
         }
+    }
+}
+
+private final class LinkAwareNSTextView: NSTextView {
+    override func paste(_ sender: Any?) {
+        if let richLinkContent = preferredPastedLinkContent() {
+            insertAttributed(richLinkContent)
+            return
+        }
+        super.paste(sender)
+    }
+
+    private func preferredPastedLinkContent() -> NSAttributedString? {
+        let pasteboard = NSPasteboard.general
+
+        if let attributed = attributedString(from: pasteboard, type: .rtfd, documentType: .rtfd),
+           containsLink(in: attributed) {
+            return attributed
+        }
+
+        if let attributed = attributedString(from: pasteboard, type: .rtf, documentType: .rtf),
+           containsLink(in: attributed) {
+            return attributed
+        }
+
+        if let attributed = attributedString(from: pasteboard, type: .html, documentType: .html),
+           containsLink(in: attributed) {
+            return attributed
+        }
+
+        if let displayText = pasteboard.string(forType: .string),
+           !displayText.isEmpty,
+           let rawURL = pasteboard.string(forType: .URL) ?? pasteboard.string(forType: NSPasteboard.PasteboardType("public.url")),
+           let url = URL(string: rawURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            let attributed = NSMutableAttributedString(string: displayText)
+            attributed.addAttribute(.link, value: url, range: NSRange(location: 0, length: attributed.length))
+            return attributed
+        }
+
+        return nil
+    }
+
+    private func attributedString(
+        from pasteboard: NSPasteboard,
+        type: NSPasteboard.PasteboardType,
+        documentType: NSAttributedString.DocumentType
+    ) -> NSAttributedString? {
+        guard let data = pasteboard.data(forType: type) else { return nil }
+        return try? NSAttributedString(
+            data: data,
+            options: [.documentType: documentType],
+            documentAttributes: nil
+        )
+    }
+
+    private func containsLink(in attributed: NSAttributedString) -> Bool {
+        var hasLink = false
+        let fullRange = NSRange(location: 0, length: attributed.length)
+        attributed.enumerateAttribute(.link, in: fullRange, options: []) { value, _, stop in
+            if value != nil {
+                hasLink = true
+                stop.pointee = true
+            }
+        }
+        return hasLink
+    }
+
+    private func insertAttributed(_ attributed: NSAttributedString) {
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: attributed.string) else { return }
+        textStorage?.replaceCharacters(in: range, with: attributed)
+        didChangeText()
     }
 }
 
@@ -1096,6 +1292,13 @@ struct ReportField: Identifiable, Codable, Equatable {
     }
 }
 
+private struct ReportBackupPackage: Codable {
+    var version: Int
+    var exportedAt: Date
+    var reports: [Report]
+    var fields: [ReportField]
+}
+
 // MARK: - Report Settings
 
 class ReportSettings: ObservableObject {
@@ -1158,6 +1361,12 @@ class ReportSettings: ObservableObject {
     
     func moveFields(from source: IndexSet, to destination: Int) {
         fields.move(fromOffsets: source, toOffset: destination)
+        saveSettings()
+    }
+
+    func replaceFields(with newFields: [ReportField]) {
+        guard !newFields.isEmpty else { return }
+        fields = newFields
         saveSettings()
     }
 }
@@ -1241,6 +1450,41 @@ class ReportViewModel: ObservableObject {
 
         let attributedText = makeAttributedReport(from: groupedHistoryPlainText())
         writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
+    }
+
+    func exportBackup() {
+        guard !history.isEmpty else {
+            showModalAlert(
+                title: "No Reports to Export",
+                message: "Create at least one report before exporting a backup."
+            )
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = defaultBackupFileName()
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                self.writeBackupPackage(to: url)
+            }
+        }
+    }
+
+    func importBackup() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                self.readBackupPackage(from: url)
+            }
+        }
     }
     
     private func makeAttributedReport(from text: String) -> NSAttributedString {
@@ -1360,6 +1604,141 @@ class ReportViewModel: ObservableObject {
         }
 
         return orderedDates
+    }
+
+    private func writeBackupPackage(to url: URL) {
+        do {
+            let payload = ReportBackupPackage(
+                version: 1,
+                exportedAt: Date(),
+                reports: history,
+                fields: settings.fields
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(payload)
+            try data.write(to: url, options: .atomic)
+
+            showModalAlert(
+                title: "Backup Exported",
+                message: "Saved \(history.count) reports to \(url.lastPathComponent)."
+            )
+        } catch {
+            showModalAlert(
+                title: "Export Failed",
+                message: error.localizedDescription,
+                style: .critical
+            )
+        }
+    }
+
+    private func readBackupPackage(from url: URL) {
+        do {
+            let importedPackage = try decodeBackupPackage(from: url)
+            guard !importedPackage.reports.isEmpty else {
+                showModalAlert(
+                    title: "Import Failed",
+                    message: "The selected backup file does not contain reports.",
+                    style: .warning
+                )
+                return
+            }
+
+            saveCurrentReport()
+
+            guard let importMode = chooseImportMode() else { return }
+
+            switch importMode {
+            case .replace:
+                history = sortedReports(importedPackage.reports)
+                if !importedPackage.fields.isEmpty {
+                    settings.replaceFields(with: importedPackage.fields)
+                }
+            case .merge:
+                history = mergedHistory(with: importedPackage.reports)
+            }
+
+            saveHistory()
+            if let latest = history.first {
+                currentReport = latest
+            }
+            hasUnsavedChanges = false
+
+            showModalAlert(
+                title: "Import Successful",
+                message: "Imported \(importedPackage.reports.count) report(s)."
+            )
+        } catch {
+            showModalAlert(
+                title: "Import Failed",
+                message: error.localizedDescription,
+                style: .critical
+            )
+        }
+    }
+
+    private func decodeBackupPackage(from url: URL) throws -> ReportBackupPackage {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        if let payload = try? decoder.decode(ReportBackupPackage.self, from: data) {
+            return payload
+        }
+
+        let reports = try decoder.decode([Report].self, from: data)
+        return ReportBackupPackage(version: 1, exportedAt: Date(), reports: reports, fields: [])
+    }
+
+    private enum ImportMode {
+        case replace
+        case merge
+    }
+
+    private func chooseImportMode() -> ImportMode? {
+        let alert = NSAlert()
+        alert.messageText = "Import Backup"
+        alert.informativeText = "Choose how to import reports."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Replace Existing")
+        alert.addButton(withTitle: "Merge")
+        alert.addButton(withTitle: "Cancel")
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .replace
+        case .alertSecondButtonReturn:
+            return .merge
+        default:
+            return nil
+        }
+    }
+
+    private func mergedHistory(with importedReports: [Report]) -> [Report] {
+        var mergedByID = Dictionary(uniqueKeysWithValues: history.map { ($0.id, $0) })
+        for report in importedReports {
+            mergedByID[report.id] = report
+        }
+        return sortedReports(Array(mergedByID.values))
+    }
+
+    private func sortedReports(_ reports: [Report]) -> [Report] {
+        reports.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func defaultBackupFileName() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "reports_backup_\(formatter.string(from: Date())).json"
+    }
+
+    private func showModalAlert(title: String, message: String, style: NSAlert.Style = .informational) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = style
+        alert.runModal()
     }
     
     func exportToExcel() {
