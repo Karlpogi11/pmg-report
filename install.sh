@@ -127,12 +127,22 @@ echo "  Destination:$INSTALL_DIR"
 
 if [[ "$AUTO_YES" -ne 1 ]]; then
   CONFIRM=""
-  if [[ -r /dev/tty ]]; then
-    printf "Continue install? [y/N] " > /dev/tty
-    IFS= read -r CONFIRM < /dev/tty || true
+  PROMPT="Continue install? [y/N]"
+
+  if [[ -t 0 ]]; then
+    if ! IFS= read -r -p "$PROMPT " CONFIRM; then
+      echo "No interactive response detected. Continuing install..."
+      CONFIRM="y"
+    fi
+  elif [[ -t 1 && -e /dev/tty ]]; then
+    printf "%s " "$PROMPT" > /dev/tty 2>/dev/null || true
+    if ! IFS= read -r CONFIRM < /dev/tty 2>/dev/null; then
+      echo "No interactive response detected. Continuing install..."
+      CONFIRM="y"
+    fi
   else
-    echo "No interactive terminal found. Re-run with --yes to continue non-interactively." >&2
-    exit 1
+    echo "No interactive terminal found. Continuing install..."
+    CONFIRM="y"
   fi
 
   if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
