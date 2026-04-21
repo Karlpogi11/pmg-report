@@ -776,9 +776,7 @@ struct Report: Identifiable, Codable {
         output += "STOCK-OUT\n\(stockOut)\n\n"
         output += "SAFEKEEPING\n\(safekeeping)\n\n"
         output += "KBB SHIPOUT\n\(kbbShipout)\n\n"
-        if !additionalNotes.isEmpty {
-            output += "\(additionalNotes)\n"
-        }
+        output += "OTHERS\n\(additionalNotes)\n"
         return output
     }
     
@@ -943,9 +941,38 @@ class ReportViewModel: ObservableObject {
     }
     
     func copyToClipboard() {
+        let plainText = currentReport.formattedOutput
+        let attributedText = makeAttributedReport(from: plainText)
+        let pasteboardItem = NSPasteboardItem()
+        
+        pasteboardItem.setString(plainText, forType: .string)
+        
+        if let rtfData = try? attributedText.data(
+            from: NSRange(location: 0, length: attributedText.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        ) {
+            pasteboardItem.setData(rtfData, forType: .rtf)
+        }
+        
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(currentReport.formattedOutput, forType: .string)
+        pasteboard.writeObjects([pasteboardItem])
+    }
+    
+    private func makeAttributedReport(from text: String) -> NSAttributedString {
+        let attributedText = NSMutableAttributedString(string: text)
+        let searchRange = NSRange(location: 0, length: (text as NSString).length)
+        
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return attributedText
+        }
+        
+        detector.enumerateMatches(in: text, options: [], range: searchRange) { match, _, _ in
+            guard let match, let link = match.url else { return }
+            attributedText.addAttribute(.link, value: link, range: match.range)
+        }
+        
+        return attributedText
     }
     
     func exportToExcel() {
