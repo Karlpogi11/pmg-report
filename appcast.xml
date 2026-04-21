@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Report Template</title>
+        <item>
+            <title>1.1.2</title>
+            <pubDate>Tue, 21 Apr 2026 19:18:28 +0800</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/Karlpogi11/pmg-report/releases/download/v1.1.2/Report-Template-1.1.2.dmg" length="2499190" type="application/octet-stream" sparkle:edSignature="hVZkL9Egi/hke4xg6wtfYPGRls9k4aWraH1wpJaSbf/ET8MeUn38UefyK1vxvZGxKclcfCp4Z7FKwShZxmfABQ=="/>
+        </item>
+    </channel>
+</rss>
