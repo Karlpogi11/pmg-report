@@ -99,6 +99,48 @@ TAG_NAME="$(sed -n '1p' "$TMP_DIR/release-info.txt")"
 DMG_NAME="$(sed -n '2p' "$TMP_DIR/release-info.txt")"
 DMG_URL="$(sed -n '3p' "$TMP_DIR/release-info.txt")"
 
+if [[ "$REQUESTED_VERSION" == "latest" ]]; then
+  INSTALLED_APP_PATH="$INSTALL_DIR/Report Template.app"
+  if [[ -d "$INSTALLED_APP_PATH" ]]; then
+    INSTALLED_VERSION="$(defaults read "$INSTALLED_APP_PATH/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || true)"
+    if [[ -z "$INSTALLED_VERSION" ]]; then
+      INSTALLED_VERSION="$(defaults read "$INSTALLED_APP_PATH/Contents/Info.plist" CFBundleVersion 2>/dev/null || true)"
+    fi
+
+    if [[ -n "$INSTALLED_VERSION" ]]; then
+      if ! python3 - "$TAG_NAME" "$INSTALLED_VERSION" <<'PY'
+import re
+import sys
+
+def normalize(version: str) -> str:
+    version = version.strip()
+    if version.lower().startswith("v"):
+        return version[1:]
+    return version
+
+def to_components(version: str):
+    return [int(part) for part in re.split(r"[^0-9]+", normalize(version)) if part]
+
+remote = to_components(sys.argv[1])
+local = to_components(sys.argv[2])
+
+if not remote or not local:
+    raise SystemExit(0 if normalize(sys.argv[1]) > normalize(sys.argv[2]) else 1)
+
+count = max(len(remote), len(local))
+remote += [0] * (count - len(remote))
+local += [0] * (count - len(local))
+
+raise SystemExit(0 if remote > local else 1)
+PY
+      then
+        echo "Already up to date (installed: $INSTALLED_VERSION, latest: ${TAG_NAME#v}). Skipping download."
+        exit 0
+      fi
+    fi
+  fi
+fi
+
 echo "Downloading $DMG_NAME ($TAG_NAME)..."
 curl -fL "$DMG_URL" -o "$DMG_PATH"
 

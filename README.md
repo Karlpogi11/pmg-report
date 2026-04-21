@@ -20,6 +20,8 @@ Install latest release:
 curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash
 ```
 
+The installer checks your installed app version first and skips download when you're already on latest.
+
 Install latest release (non-interactive):
 
 ```bash
