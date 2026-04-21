@@ -55,10 +55,13 @@ jobs:
           name: v${{ env.APP_VERSION }}
           body: |
             Install files:
-            - Report-Template-${{ env.APP_VERSION }}-installer.command (one-click, recommended)
-            - Report-Template-${{ env.APP_VERSION }}.dmg (drag to Applications)
+            - Report-Template-${{ env.APP_VERSION }}.dmg (recommended: drag to Applications)
+            - install.sh (optional terminal installer)
+
+            Terminal install (latest):
+            curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash
           generate_release_notes: true
           overwrite_files: true
           files: |
-            dist/Report-Template-${{ env.APP_VERSION }}-installer.command
             dist/Report-Template-${{ env.APP_VERSION }}.dmg
+            install.sh

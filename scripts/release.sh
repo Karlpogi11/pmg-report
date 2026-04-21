@@ -33,14 +33,6 @@ get_version() {
   git -C "$ROOT_DIR" rev-parse --short HEAD
 }
 
-decode_base64_cmd() {
-  if base64 --help 2>/dev/null | grep -q -- "--decode"; then
-    printf "base64 --decode"
-  else
-    printf "base64 -D"
-  fi
-}
-
 VERSION="${VERSION:-$(get_version)}"
 SAFE_VERSION="$(printf "%s" "$VERSION" | tr ' /' '--')"
 SAFE_NAME="$(printf "%s" "${APP_NAME%.app}" | tr ' /' '--')"
@@ -49,9 +41,6 @@ APP_SOURCE="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/$APP_NAME"
 APP_DIST_PATH="$DIST_DIR/$APP_NAME"
 DMG_PATH="$DIST_DIR/${SAFE_NAME}-${SAFE_VERSION}.dmg"
 PKG_STAGE="$BUILD_DIR/dmg-stage"
-PAYLOAD_TAR="$BUILD_DIR/${SAFE_NAME}-${SAFE_VERSION}.tar.gz"
-INSTALLER_COMMAND_PATH="$DIST_DIR/${SAFE_NAME}-${SAFE_VERSION}-installer.command"
-BASE64_DECODE_CMD="$(decode_base64_cmd)"
 
 echo "Preparing clean build folders..."
 rm -rf "$BUILD_DIR" "$DIST_DIR"
@@ -90,60 +79,10 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH"
 
-echo "Creating one-click installer (.command)..."
-LC_ALL=C tar -C "$DIST_DIR" -czf "$PAYLOAD_TAR" "$APP_NAME"
-cat >"$INSTALLER_COMMAND_PATH" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-
-APP_NAME="$APP_NAME"
-INSTALL_DIR="\${INSTALL_DIR:-/Applications}"
-TMP_DIR="\$(mktemp -d)"
-trap 'rm -rf "\$TMP_DIR"' EXIT
-
-extract_payload() {
-  local payload_line
-  payload_line="\$(awk '/^__PAYLOAD_BELOW__/ { print NR + 1; exit 0; }' "\$0")"
-  tail -n "+\${payload_line}" "\$0" | $BASE64_DECODE_CMD > "\$TMP_DIR/payload.tar.gz"
-}
-
-install_app() {
-  local app_source="\$TMP_DIR/\$APP_NAME"
-  local app_target="\$INSTALL_DIR/\$APP_NAME"
-
-  if [[ ! -d "\$app_source" ]]; then
-    echo "Installer payload is missing \$APP_NAME." >&2
-    exit 1
-  fi
-
-  if rm -rf "\$app_target" 2>/dev/null && cp -R "\$app_source" "\$INSTALL_DIR/" 2>/dev/null; then
-    echo "Installed \$APP_NAME to \$INSTALL_DIR."
-    return 0
-  fi
-
-  echo "Requesting admin permission to finish install..."
-  sudo rm -rf "\$app_target"
-  sudo cp -R "\$app_source" "\$INSTALL_DIR/"
-  echo "Installed \$APP_NAME to \$INSTALL_DIR."
-}
-
-extract_payload
-LC_ALL=C tar -xzf "\$TMP_DIR/payload.tar.gz" -C "\$TMP_DIR"
-install_app
-echo
-read -r -p "Installation complete. Press Enter to close..."
-exit 0
-__PAYLOAD_BELOW__
-EOF
-
-base64 <"$PAYLOAD_TAR" >>"$INSTALLER_COMMAND_PATH"
-chmod +x "$INSTALLER_COMMAND_PATH"
-
 echo
 echo "Release artifacts created:"
 echo "  App:       $APP_DIST_PATH"
 echo "  DMG:       $DMG_PATH"
-echo "  One-click: $INSTALLER_COMMAND_PATH"
 echo
 echo "Notes:"
 echo "  - This build is unsigned (CODE_SIGNING_ALLOWED=NO)."

@@ -6,24 +6,29 @@ Simple report app for macOS.
 
 - [Releases Page](https://github.com/Karlpogi11/pmg-report/releases)
 
-## Install (User Friendly)
-
-### Option 1: One-click installer (easiest)
-
-1. Open [Releases Page](https://github.com/Karlpogi11/pmg-report/releases).
-2. Download `Report-Template-<version>-installer.command`.
-3. Double-click the file.
-4. Follow the prompts.
-
-### Option 2: DMG install
+## Install (Recommended: DMG)
 
 1. Download `Report-Template-<version>.dmg`.
 2. Open the DMG.
 3. Drag `Report Template.app` to `Applications`.
 
+## Install (Terminal Option)
+
+Install latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash -s -- v1.1
+```
+
 ## Update app
 
-Install the newer version the same way as above.  
+Install the newer version the same way as above.
 No uninstall is needed.
 
 ## If macOS blocks first launch
@@ -43,4 +48,3 @@ Build release files:
 Output files are in `dist/`:
 
 - `Report-Template-<version>.dmg`
-- `Report-Template-<version>-installer.command`

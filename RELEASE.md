@@ -3,7 +3,6 @@
 This project can generate:
 
 - A drag-and-drop DMG (`.dmg`)
-- A one-click installer (`.command`)
 
 ## Build release artifacts
 
@@ -18,7 +17,6 @@ Artifacts are written to `dist/`:
 
 - `dist/Report Template.app`
 - `dist/Report-Template-<version>.dmg`
-- `dist/Report-Template-<version>-installer.command`
 
 By default, the script builds for your current Mac architecture only (`arm64` on Apple Silicon, `x86_64` on Intel).  
 If you want a universal build, run:
@@ -29,12 +27,13 @@ DESTINATION="generic/platform=macOS" ./scripts/release.sh
 
 ## How users install
 
-- One-click route (recommended): double-click `Report-Template-<version>-installer.command`, then confirm prompts.
-- DMG route: open the DMG, drag `Report Template.app` into `Applications`.
+- DMG route (recommended): open the DMG, drag `Report Template.app` into `Applications`.
+- Terminal route (optional): run `install.sh` to download latest release DMG and install to `Applications`.
 
 ## Important for public release
 
 Current script builds unsigned binaries (`CODE_SIGNING_ALLOWED=NO`), which may show macOS security warnings.
+Unsigned `.command` installers are blocked more aggressively by Gatekeeper, which is why DMG is the default distribution format.
 
 Better approach for public distribution:
 
