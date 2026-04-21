@@ -116,6 +116,14 @@ struct ContentView: View {
                     }
                     .listStyle(.sidebar)
                 }
+
+                Divider()
+
+                Text("Karl Garcia • 2026")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
             }
             .frame(minWidth: 250)
             .toolbar {
@@ -270,10 +278,16 @@ struct ContentView: View {
         HStack {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: "doc.text.fill")
-                        .font(.title2)
-                        .foregroundStyle(.blue)
-                    Text("Current Report")
+                    Image("ReportLogo")
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 28, height: 28)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                        )
+                    Text("PMG Report")
                         .font(.title2)
                         .fontWeight(.bold)
                 }
