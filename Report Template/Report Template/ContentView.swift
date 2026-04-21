@@ -1134,47 +1134,99 @@ class ReportViewModel: ObservableObject {
     }
     
     func copyToClipboard() {
-        let plainText = currentReport.formattedOutput
-        let attributedText = makeAttributedReport(from: plainText)
+        let attributedText = makeAttributedReport(from: currentReport.formattedOutput)
+        writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
+    }
+
+    func copyAllHistoryToClipboardGroupedByDate() {
+        guard !history.isEmpty else { return }
+
+        let attributedText = makeAttributedReport(from: groupedHistoryPlainText())
+        writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
+    }
+    
+    private func makeAttributedReport(from text: String) -> NSAttributedString {
+        let attributedText = NSMutableAttributedString(string: text)
+
+        applyMarkdownLinks(to: attributedText)
+        applySlackStyleLinks(to: attributedText)
+        applyDetectedURLLinks(to: attributedText)
+
+        return attributedText
+    }
+
+    private func writeToPasteboard(plainText: String, attributedText: NSAttributedString) {
         let pasteboardItem = NSPasteboardItem()
-        
         pasteboardItem.setString(plainText, forType: .string)
-        
+
         if let rtfData = try? attributedText.data(
             from: NSRange(location: 0, length: attributedText.length),
             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
         ) {
             pasteboardItem.setData(rtfData, forType: .rtf)
         }
-        
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([pasteboardItem])
     }
 
-    func copyAllHistoryToClipboardGroupedByDate() {
-        guard !history.isEmpty else { return }
-
-        let plainText = groupedHistoryPlainText()
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(plainText, forType: .string)
-    }
-    
-    private func makeAttributedReport(from text: String) -> NSAttributedString {
-        let attributedText = NSMutableAttributedString(string: text)
-        let searchRange = NSRange(location: 0, length: (text as NSString).length)
-        
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return attributedText
+    private func applyMarkdownLinks(to attributedText: NSMutableAttributedString) {
+        guard let regex = try? NSRegularExpression(pattern: #"\[([^\]]+)\]\((https?://[^\s)]+)\)"#) else {
+            return
         }
-        
-        detector.enumerateMatches(in: text, options: [], range: searchRange) { match, _, _ in
+
+        while true {
+            let fullRange = NSRange(location: 0, length: attributedText.length)
+            guard let match = regex.firstMatch(in: attributedText.string, options: [], range: fullRange),
+                  match.numberOfRanges == 3 else { return }
+
+            let nsString = attributedText.string as NSString
+            let linkText = nsString.substring(with: match.range(at: 1))
+            let urlString = nsString.substring(with: match.range(at: 2))
+
+            let replacement = NSMutableAttributedString(string: linkText)
+            if let url = URL(string: urlString) {
+                replacement.addAttribute(.link, value: url, range: NSRange(location: 0, length: replacement.length))
+            }
+
+            attributedText.replaceCharacters(in: match.range, with: replacement)
+        }
+    }
+
+    private func applySlackStyleLinks(to attributedText: NSMutableAttributedString) {
+        guard let regex = try? NSRegularExpression(pattern: #"<(https?://[^>|]+)\|([^>]+)>"#) else {
+            return
+        }
+
+        while true {
+            let fullRange = NSRange(location: 0, length: attributedText.length)
+            guard let match = regex.firstMatch(in: attributedText.string, options: [], range: fullRange),
+                  match.numberOfRanges == 3 else { return }
+
+            let nsString = attributedText.string as NSString
+            let urlString = nsString.substring(with: match.range(at: 1))
+            let linkText = nsString.substring(with: match.range(at: 2))
+
+            let replacement = NSMutableAttributedString(string: linkText)
+            if let url = URL(string: urlString) {
+                replacement.addAttribute(.link, value: url, range: NSRange(location: 0, length: replacement.length))
+            }
+
+            attributedText.replaceCharacters(in: match.range, with: replacement)
+        }
+    }
+
+    private func applyDetectedURLLinks(to attributedText: NSMutableAttributedString) {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return
+        }
+
+        let fullRange = NSRange(location: 0, length: attributedText.length)
+        detector.enumerateMatches(in: attributedText.string, options: [], range: fullRange) { match, _, _ in
             guard let match, let link = match.url else { return }
             attributedText.addAttribute(.link, value: link, range: match.range)
         }
-        
-        return attributedText
     }
 
     private func groupedHistoryPlainText() -> String {
