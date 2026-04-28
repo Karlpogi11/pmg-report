@@ -8,9 +8,18 @@
 import SwiftUI
 import SwiftData
 
+final class AppCommandBridge: ObservableObject {
+    var onPrint: (() -> Void)?
+
+    func triggerPrint() {
+        onPrint?()
+    }
+}
+
 @main
 struct Report_TemplateApp: App {
     @StateObject private var appUpdateService = AppUpdateService()
+    @StateObject private var appCommandBridge = AppCommandBridge()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -27,13 +36,13 @@ struct Report_TemplateApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(appUpdateService: appUpdateService)
+            ContentView(appUpdateService: appUpdateService, appCommandBridge: appCommandBridge)
         }
         .modelContainer(sharedModelContainer)
         .commands {
             CommandGroup(replacing: .printItem) {
                 Button("Print Report...") {
-                    NotificationCenter.default.post(name: .printCurrentReportRequested, object: nil)
+                    appCommandBridge.triggerPrint()
                 }
                 .keyboardShortcut("p", modifiers: .command)
             }

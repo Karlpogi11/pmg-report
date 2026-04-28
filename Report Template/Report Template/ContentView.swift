@@ -2,15 +2,12 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
-extension Notification.Name {
-    static let printCurrentReportRequested = Notification.Name("printCurrentReportRequested")
-}
-
 // MARK: - Main Content View
 
 struct ContentView: View {
     @StateObject private var viewModel = ReportViewModel()
     @ObservedObject private var appUpdateService: AppUpdateService
+    @ObservedObject private var appCommandBridge: AppCommandBridge
     @AppStorage("didDismissBackupReminder") private var didDismissBackupReminder = false
     @State private var showingNewReportSheet = false
     @State private var showingSettings = false
@@ -20,8 +17,9 @@ struct ContentView: View {
     @State private var timeEditorValue = Date()
     @State private var copyAlertMessage = "Report copied to clipboard"
 
-    init(appUpdateService: AppUpdateService) {
+    init(appUpdateService: AppUpdateService, appCommandBridge: AppCommandBridge) {
         self.appUpdateService = appUpdateService
+        self.appCommandBridge = appCommandBridge
     }
     
     var filteredHistory: [Report] {
@@ -185,9 +183,12 @@ struct ContentView: View {
             } message: {
                 Text(copyAlertMessage)
             }
-            .onReceive(NotificationCenter.default.publisher(for: .printCurrentReportRequested)) { _ in
-                viewModel.printCurrentReport()
-            }
+        }
+        .onAppear {
+            appCommandBridge.onPrint = { viewModel.printCurrentReport() }
+        }
+        .onDisappear {
+            appCommandBridge.onPrint = nil
         }
     }
     
@@ -1842,5 +1843,8 @@ class ReportViewModel: ObservableObject {
 // MARK: - Preview
 
 #Preview {
-    ContentView(appUpdateService: AppUpdateService())
+    ContentView(
+        appUpdateService: AppUpdateService(),
+        appCommandBridge: AppCommandBridge()
+    )
 }
