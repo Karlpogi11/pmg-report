@@ -3,13 +3,13 @@
     <channel>
         <title>Report Template</title>
         <item>
-            <title>1.1.4</title>
-            <pubDate>Tue, 28 Apr 2026 12:55:19 +0800</pubDate>
-            <sparkle:version>5</sparkle:version>
-            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <title>1.1.5</title>
+            <pubDate>Tue, 28 Apr 2026 13:00:08 +0800</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/Karlpogi11/pmg-report/releases/download/v1.1.4/Report-Template-1.1.4.dmg" length="2545614" type="application/octet-stream" sparkle:edSignature="2olyC6Qn23l1Ixn+DBRTdAlv1LdAjBQ2XUsMlOvhoGAtXIP63bo9vmGrYW8+KLtYeDkcNLe0n2AO4AGSTAtUCA=="/>
+            <enclosure url="https://github.com/Karlpogi11/pmg-report/releases/download/v1.1.5/Report-Template-1.1.5.dmg" length="2545638" type="application/octet-stream" sparkle:edSignature="8c1Nfkbt9F20GaxdKdP2fCPnmidZidxZNBmrJbOVPxhMni44y8ZHvEY4+HWaCCvZVOoY+Z6+a4X6sJjJCsNMDw=="/>
         </item>
     </channel>
 </rss>
