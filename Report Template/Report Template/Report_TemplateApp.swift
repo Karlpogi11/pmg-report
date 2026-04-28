@@ -30,5 +30,13 @@ struct Report_TemplateApp: App {
             ContentView(appUpdateService: appUpdateService)
         }
         .modelContainer(sharedModelContainer)
+        .commands {
+            CommandGroup(replacing: .printItem) {
+                Button("Print Report...") {
+                    NotificationCenter.default.post(name: .printCurrentReportRequested, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: .command)
+            }
+        }
     }
 }

@@ -7,10 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B10000012F40000100000001 /* Report_Template_Widget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10000042F40000100000001 /* Report_Template_Widget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B10000132F40000100000001 /* Report_Template_Widget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000102F40000100000001 /* Report_Template_Widget.swift */; };
+		B10000142F40000100000001 /* Report_Template_WidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000112F40000100000001 /* Report_Template_WidgetBundle.swift */; };
 		A10000012E8B000100000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A10000022E8B000100000001 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		B10000032F40000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F75661CD2F35EC2900FF1236 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B10000092F40000100000001;
+			remoteInfo = Report_Template_Widget;
+		};
 		F75661E62F35EC2C00FF1236 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F75661CD2F35EC2900FF1236 /* Project object */;
@@ -27,7 +37,25 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		B10000022F40000100000001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10000012F40000100000001 /* Report_Template_Widget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		B10000042F40000100000001 /* Report_Template_Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Report_Template_Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000102F40000100000001 /* Report_Template_Widget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report_Template_Widget.swift; sourceTree = "<group>"; };
+		B10000112F40000100000001 /* Report_Template_WidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report_Template_WidgetBundle.swift; sourceTree = "<group>"; };
+		B10000122F40000100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F75661D52F35EC2900FF1236 /* Report Template.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Report Template.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F75661E52F35EC2C00FF1236 /* Report TemplateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Report TemplateTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F75661EF2F35EC2C00FF1236 /* Report TemplateUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Report TemplateUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -74,13 +102,31 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000062F40000100000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B10000052F40000100000001 /* Report Template Widget */ = {
+			isa = PBXGroup;
+			children = (
+				B10000102F40000100000001 /* Report_Template_Widget.swift */,
+				B10000112F40000100000001 /* Report_Template_WidgetBundle.swift */,
+				B10000122F40000100000001 /* Info.plist */,
+			);
+			path = "Report Template Widget";
+			sourceTree = "<group>";
+		};
 		F75661CC2F35EC2900FF1236 = {
 			isa = PBXGroup;
 			children = (
 				F75661D72F35EC2900FF1236 /* Report Template */,
+				B10000052F40000100000001 /* Report Template Widget */,
 				F75661E82F35EC2C00FF1236 /* Report TemplateTests */,
 				F75661F22F35EC2C00FF1236 /* Report TemplateUITests */,
 				F75661D62F35EC2900FF1236 /* Products */,
@@ -91,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				F75661D52F35EC2900FF1236 /* Report Template.app */,
+				B10000042F40000100000001 /* Report_Template_Widget.appex */,
 				F75661E52F35EC2C00FF1236 /* Report TemplateTests.xctest */,
 				F75661EF2F35EC2C00FF1236 /* Report TemplateUITests.xctest */,
 			);
@@ -107,10 +154,12 @@
 				F75661D12F35EC2900FF1236 /* Sources */,
 				F75661D22F35EC2900FF1236 /* Frameworks */,
 				F75661D32F35EC2900FF1236 /* Resources */,
+				B10000022F40000100000001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B100000A2F40000100000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F75661D72F35EC2900FF1236 /* Report Template */,
@@ -169,6 +218,25 @@
 			productReference = F75661EF2F35EC2C00FF1236 /* Report TemplateUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		B10000092F40000100000001 /* Report_Template_Widget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B100000D2F40000100000001 /* Build configuration list for PBXNativeTarget "Report_Template_Widget" */;
+			buildPhases = (
+				B10000082F40000100000001 /* Sources */,
+				B10000062F40000100000001 /* Frameworks */,
+				B10000072F40000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Report_Template_Widget;
+			packageProductDependencies = (
+			);
+			productName = Report_Template_Widget;
+			productReference = B10000042F40000100000001 /* Report_Template_Widget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -179,6 +247,9 @@
 				LastSwiftUpdateCheck = 1630;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
+					B10000092F40000100000001 = {
+						CreatedOnToolsVersion = 16.3;
+					};
 					F75661D42F35EC2900FF1236 = {
 						CreatedOnToolsVersion = 16.3;
 					};
@@ -210,6 +281,7 @@
 			projectRoot = "";
 			targets = (
 				F75661D42F35EC2900FF1236 /* Report Template */,
+				B10000092F40000100000001 /* Report_Template_Widget */,
 				F75661E42F35EC2C00FF1236 /* Report TemplateTests */,
 				F75661EE2F35EC2C00FF1236 /* Report TemplateUITests */,
 			);
@@ -232,6 +304,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F75661ED2F35EC2C00FF1236 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000072F40000100000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -262,9 +341,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000082F40000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000132F40000100000001 /* Report_Template_Widget.swift in Sources */,
+				B10000142F40000100000001 /* Report_Template_WidgetBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		B100000A2F40000100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000092F40000100000001 /* Report_Template_Widget */;
+			targetProxy = B10000032F40000100000001 /* PBXContainerItemProxy */;
+		};
 		F75661E72F35EC2C00FF1236 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F75661D42F35EC2900FF1236 /* Report Template */;
@@ -514,9 +607,64 @@
 			};
 			name = Release;
 		};
+		B100000B2F40000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 5;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Report Template Widget/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = "KarlApp.Report-Template.ReportTemplateWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B100000C2F40000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 5;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Report Template Widget/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = "KarlApp.Report-Template.ReportTemplateWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B100000D2F40000100000001 /* Build configuration list for PBXNativeTarget "Report_Template_Widget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B100000B2F40000100000001 /* Debug */,
+				B100000C2F40000100000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F75661D02F35EC2900FF1236 /* Build configuration list for PBXProject "Report Template" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

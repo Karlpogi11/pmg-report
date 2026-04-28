@@ -2,6 +2,10 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
+extension Notification.Name {
+    static let printCurrentReportRequested = Notification.Name("printCurrentReportRequested")
+}
+
 // MARK: - Main Content View
 
 struct ContentView: View {
@@ -180,6 +184,9 @@ struct ContentView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(copyAlertMessage)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .printCurrentReportRequested)) { _ in
+                viewModel.printCurrentReport()
             }
         }
     }
@@ -1380,6 +1387,65 @@ class ReportViewModel: ObservableObject {
 
         let attributedText = makeAttributedReport(from: groupedHistoryPlainText())
         writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
+    }
+
+    func printCurrentReport() {
+        guard hasActiveReport else {
+            showModalAlert(
+                title: "No Active Report",
+                message: "Create or open a report before printing.",
+                style: .warning
+            )
+            return
+        }
+
+        let text = formattedOutput(for: currentReport).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            showModalAlert(
+                title: "Nothing to Print",
+                message: "The current report is empty."
+            )
+            return
+        }
+
+        let attributedText = NSMutableAttributedString(attributedString: makeAttributedReport(from: text))
+        attributedText.addAttributes(
+            [
+                .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+                .foregroundColor: NSColor.labelColor,
+            ],
+            range: NSRange(location: 0, length: attributedText.length)
+        )
+
+        let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo.shared
+        printInfo.horizontalPagination = .fit
+        printInfo.verticalPagination = .automatic
+        printInfo.topMargin = 36
+        printInfo.bottomMargin = 36
+        printInfo.leftMargin = 36
+        printInfo.rightMargin = 36
+
+        let contentWidth = max(200, printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin)
+        let contentHeight = max(400, printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin)
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight))
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.textContainer?.containerSize = NSSize(width: contentWidth - 20, height: .greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = false
+        textView.textStorage?.setAttributedString(attributedText)
+
+        if let textContainer = textView.textContainer, let layoutManager = textView.layoutManager {
+            layoutManager.ensureLayout(for: textContainer)
+            let usedHeight = layoutManager.usedRect(for: textContainer).height
+            textView.frame.size.height = max(contentHeight, usedHeight + 24)
+        }
+
+        let printOperation = NSPrintOperation(view: textView, printInfo: printInfo)
+        printOperation.showsPrintPanel = true
+        printOperation.showsProgressPanel = true
+        printOperation.run()
     }
 
     func exportBackup() {
