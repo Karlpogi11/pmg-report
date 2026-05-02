@@ -5,13 +5,18 @@ This project can generate:
 - A drag-and-drop DMG (`.dmg`)
 - A signed Sparkle feed (`appcast.xml`)
 
+Release channels:
+
+- `production`: Developer ID + notarized artifacts for `v*` tags.
+- `beta`: unsigned prerelease artifacts for `beta-v*` tags.
+
 ## Build release artifacts
 
 Run from repo root:
 
 ```bash
 chmod +x scripts/release.sh
-./scripts/release.sh
+RELEASE_CHANNEL=beta ./scripts/release.sh
 ```
 
 Artifacts are written to `dist/`:
@@ -39,8 +44,28 @@ DOWNLOAD_URL_PREFIX="https://github.com/Karlpogi11/pmg-report/releases/download/
 Notes:
 
 - `SPARKLE_KEY_ACCOUNT` is looked up in macOS Keychain for the EdDSA private key used to sign appcast entries.
-- In local mode, if the key does not exist yet, `scripts/release.sh` can create it.
+- In beta mode, `PPUpdatesEnabled` is written as `false` in the built app so in-app Sparkle checks are disabled.
+- In local mode, if the key does not exist yet and `SPARKLE_ALLOW_KEY_GENERATION=1`, `scripts/release.sh` can create it.
 - The generated `dist/appcast.xml` is also copied to repo root `appcast.xml` by default.
+
+## Beta release behavior (unsigned)
+
+Beta releases are intentionally unsigned/not notarized while production credentials are unavailable.
+
+```bash
+RELEASE_CHANNEL=beta \
+SPARKLE_ALLOW_KEY_GENERATION=0 \
+SPARKLE_PRIVATE_KEY_BASE64="<base64-private-key>" \
+RELEASE_TAG="beta-v1.1.6-beta.1" \
+DOWNLOAD_URL_PREFIX="https://github.com/Karlpogi11/pmg-report/releases/download/beta-v1.1.6-beta.1/" \
+./scripts/release.sh
+```
+
+Verification scope in beta mode:
+
+1. App bundle integrity (`codesign --verify`).
+2. DMG integrity (`hdiutil verify`).
+3. Sparkle appcast signature presence and expected DMG reference.
 
 ## Production signing and notarization
 
@@ -58,6 +83,7 @@ xcrun notarytool store-credentials "karlapp-notary" \
 2. Run the release script with signing identity + notary profile:
 
 ```bash
+RELEASE_CHANNEL=production \
 PRODUCTION_RELEASE=1 \
 DEVELOPER_ID_APP_IDENTITY="Developer ID Application: Your Name (ABCDE12345)" \
 NOTARY_KEYCHAIN_PROFILE="karlapp-notary" \
@@ -94,7 +120,7 @@ In production mode, key auto-generation is blocked to prevent accidental key rot
 
 ## CI production flow (GitHub Actions)
 
-`.github/workflows/release.yml` now enforces strict production mode on tag pushes.
+`.github/workflows/release.yml` enforces strict production mode on `v*` tag pushes.
 Set these repository secrets:
 
 - `MACOS_CERTIFICATE_P12_BASE64`
@@ -111,8 +137,17 @@ You can set all required secrets with one command after exporting the values:
 ./scripts/configure_release_secrets.sh
 ```
 
+## CI beta flow (GitHub Actions)
+
+`.github/workflows/release-beta.yml` publishes unsigned prereleases for `beta-v*` tags.
+
+Required secret:
+
+- `SPARKLE_PRIVATE_KEY_BASE64`
+
 ## Key environment variables
 
+- `RELEASE_CHANNEL`: `beta` or `production` (default: `beta`).
 - `PRODUCTION_RELEASE`: `1` enables strict production gates.
 - `DEVELOPER_ID_APP_IDENTITY`: enables Developer ID signing mode.
 - `NOTARY_KEYCHAIN_PROFILE`: enables notarization when present (`NOTARIZE_ENABLED=auto`).
@@ -122,8 +157,16 @@ You can set all required secrets with one command after exporting the values:
 - `SPARKLE_ALLOW_KEY_GENERATION`: default `1` for local mode, forced to `0` in production mode.
 - `SPARKLE_PRIVATE_KEY_FILE` or `SPARKLE_PRIVATE_KEY_BASE64`: imports an existing Sparkle private key if keychain key is missing.
 - `VERIFY_RELEASE_ARTIFACTS`: default `1`; runs release verification checks before success.
+- `UPDATES_ENABLED_PLIST_KEY`: app plist key used to control Sparkle UI availability (`PPUpdatesEnabled` by default).
 
 ## How users install
 
 - DMG route (recommended): open the DMG, drag `Report Template.app` into `Applications`.
-- Terminal route (optional): run `install.sh` to download latest release DMG and install to `Applications`.
+- Terminal route (optional): run `install.sh` to download the latest stable DMG and install to `Applications`.
+- Beta channel install: run `install.sh --beta` or install a `beta-v*` tag directly.
+
+## Immediate containment for blocked installs
+
+1. Delete `/Applications/Report Template.app`.
+2. Install the latest `beta-v*` DMG from Releases.
+3. Launch once with `Control` + click -> `Open`.

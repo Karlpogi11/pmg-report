@@ -4,14 +4,17 @@ set -euo pipefail
 REPO="${REPO:-Karlpogi11/pmg-report}"
 INSTALL_DIR="${INSTALL_DIR:-/Applications}"
 REQUESTED_VERSION="latest"
+RELEASE_CHANNEL="${RELEASE_CHANNEL:-stable}"
 AUTO_YES=0
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [version] [--yes]
+Usage: install.sh [version] [--channel stable|beta] [--yes]
 
 Examples:
   install.sh
+  install.sh --beta
+  install.sh --channel beta
   install.sh v1.1
   install.sh --yes
   install.sh v1.1 --yes
@@ -22,6 +25,24 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -y|--yes)
       AUTO_YES=1
+      ;;
+    --beta)
+      RELEASE_CHANNEL="beta"
+      ;;
+    --stable)
+      RELEASE_CHANNEL="stable"
+      ;;
+    --channel)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "--channel requires a value (stable or beta)." >&2
+        usage
+        exit 1
+      fi
+      RELEASE_CHANNEL="$1"
+      ;;
+    --channel=*)
+      RELEASE_CHANNEL="${1#*=}"
       ;;
     -h|--help)
       usage
@@ -39,14 +60,33 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+CHANNEL_NORMALIZED="$(printf "%s" "$RELEASE_CHANNEL" | tr '[:upper:]' '[:lower:]')"
+
+case "$CHANNEL_NORMALIZED" in
+  stable) RELEASE_CHANNEL="stable" ;;
+  beta) RELEASE_CHANNEL="beta" ;;
+  *)
+    echo "Invalid --channel value '$RELEASE_CHANNEL'. Use stable or beta." >&2
+    usage
+    exit 1
+    ;;
+esac
+
 if [[ "$REQUESTED_VERSION" == "latest" ]]; then
-  RELEASE_API_URL="https://api.github.com/repos/$REPO/releases/latest"
+  if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
+    RELEASE_API_URL="https://api.github.com/repos/$REPO/releases/latest"
+    RELEASE_LOOKUP_MODE="latest_stable"
+  else
+    RELEASE_API_URL="https://api.github.com/repos/$REPO/releases?per_page=30"
+    RELEASE_LOOKUP_MODE="latest_beta"
+  fi
 else
   TAG="$REQUESTED_VERSION"
-  if [[ "$TAG" != v* ]]; then
+  if [[ "$TAG" != v* && "$TAG" != beta-v* ]]; then
     TAG="v$TAG"
   fi
   RELEASE_API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
+  RELEASE_LOOKUP_MODE="tag"
 fi
 
 TMP_DIR="$(mktemp -d)"
@@ -62,44 +102,63 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Fetching release metadata from $REPO..."
+echo "Fetching $RELEASE_CHANNEL release metadata from $REPO..."
 curl -fsSL \
   -H "Accept: application/vnd.github+json" \
   "$RELEASE_API_URL" > "$TMP_DIR/release.json"
 
-python3 - "$TMP_DIR/release.json" > "$TMP_DIR/release-info.txt" <<'PY'
+python3 - "$TMP_DIR/release.json" "$RELEASE_LOOKUP_MODE" > "$TMP_DIR/release-info.txt" <<'PY'
 import json
 import sys
 
 release_path = sys.argv[1]
+lookup_mode = sys.argv[2]
 with open(release_path, "r", encoding="utf-8") as file:
     data = json.load(file)
 
-tag_name = data.get("tag_name")
+def resolve_dmg_asset(release_obj):
+    for asset in release_obj.get("assets", []):
+        name = asset.get("name", "")
+        url = asset.get("browser_download_url", "")
+        if name.endswith(".dmg") and url:
+            return name, url
+    return None
+
+if lookup_mode == "latest_beta":
+    release_obj = None
+    for candidate in data:
+        if candidate.get("draft"):
+            continue
+        if not candidate.get("prerelease"):
+            continue
+        if resolve_dmg_asset(candidate):
+            release_obj = candidate
+            break
+    if release_obj is None:
+        raise SystemExit("No beta pre-release with a .dmg asset was found.")
+else:
+    release_obj = data
+
+tag_name = release_obj.get("tag_name")
 if not tag_name:
     raise SystemExit("Could not read release tag_name from GitHub API response.")
 
-dmg_asset = None
-for asset in data.get("assets", []):
-    name = asset.get("name", "")
-    url = asset.get("browser_download_url", "")
-    if name.endswith(".dmg") and url:
-        dmg_asset = (name, url)
-        break
-
+dmg_asset = resolve_dmg_asset(release_obj)
 if not dmg_asset:
     raise SystemExit("No .dmg asset found in the selected release.")
 
 print(tag_name)
 print(dmg_asset[0])
 print(dmg_asset[1])
+print("1" if release_obj.get("prerelease") else "0")
 PY
 
 TAG_NAME="$(sed -n '1p' "$TMP_DIR/release-info.txt")"
 DMG_NAME="$(sed -n '2p' "$TMP_DIR/release-info.txt")"
 DMG_URL="$(sed -n '3p' "$TMP_DIR/release-info.txt")"
+IS_PRERELEASE="$(sed -n '4p' "$TMP_DIR/release-info.txt")"
 
-if [[ "$REQUESTED_VERSION" == "latest" ]]; then
+if [[ "$REQUESTED_VERSION" == "latest" && "$RELEASE_CHANNEL" == "stable" ]]; then
   INSTALLED_APP_PATH="$INSTALL_DIR/Report Template.app"
   if [[ -d "$INSTALLED_APP_PATH" ]]; then
     INSTALLED_VERSION="$(defaults read "$INSTALLED_APP_PATH/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || true)"
@@ -165,7 +224,14 @@ echo
 echo "Ready to install:"
 echo "  App:        $APP_NAME"
 echo "  Version:    $TAG_NAME"
+echo "  Channel:    $RELEASE_CHANNEL"
 echo "  Destination:$INSTALL_DIR"
+
+if [[ "$IS_PRERELEASE" == "1" ]]; then
+  echo
+  echo "Warning: this is an unsigned beta release."
+  echo "macOS may block first launch. Use Control-click -> Open once."
+fi
 
 if [[ "$AUTO_YES" -ne 1 ]]; then
   CONFIRM=""

@@ -19,6 +19,7 @@ PKG_STAGE="$BUILD_DIR/dmg-stage"
 BUILD_LOG="$BUILD_DIR/xcodebuild.log"
 PRODUCTION_RELEASE="${PRODUCTION_RELEASE:-0}"
 VERIFY_RELEASE_ARTIFACTS="${VERIFY_RELEASE_ARTIFACTS:-1}"
+RELEASE_CHANNEL="${RELEASE_CHANNEL:-beta}"
 
 SPARKLE_ENABLED="${SPARKLE_ENABLED:-1}"
 SPARKLE_KEY_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-KarlApp.Report-Template}"
@@ -39,6 +40,7 @@ DEVELOPER_ID_APP_IDENTITY="${DEVELOPER_ID_APP_IDENTITY:-}"
 NOTARIZE_ENABLED="${NOTARIZE_ENABLED:-auto}"
 NOTARY_KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-}"
 NOTARY_TEAM_ID="${NOTARY_TEAM_ID:-}"
+UPDATES_ENABLED_PLIST_KEY="${UPDATES_ENABLED_PLIST_KEY:-PPUpdatesEnabled}"
 
 get_version() {
   local version
@@ -98,6 +100,21 @@ normalize_bool() {
     0|false|FALSE|no|NO) printf "0\n" ;;
     *)
       echo "Boolean flag value must be one of: 1,0,true,false,yes,no (got '$value')." >&2
+      exit 1
+      ;;
+  esac
+}
+
+normalize_release_channel() {
+  local value="$1"
+  local normalized_value
+  normalized_value="$(printf "%s" "$value" | tr '[:upper:]' '[:lower:]')"
+
+  case "$normalized_value" in
+    beta) printf "beta\n" ;;
+    production) printf "production\n" ;;
+    *)
+      echo "RELEASE_CHANNEL must be one of: beta, production (got '$value')." >&2
       exit 1
       ;;
   esac
@@ -289,6 +306,11 @@ verify_sparkle_public_key_alignment() {
 }
 
 resolve_release_mode() {
+  RELEASE_CHANNEL="$(normalize_release_channel "$RELEASE_CHANNEL")"
+  if [[ "$RELEASE_CHANNEL" == "production" ]]; then
+    PRODUCTION_RELEASE="1"
+  fi
+
   PRODUCTION_RELEASE="$(normalize_bool "$PRODUCTION_RELEASE")"
   VERIFY_RELEASE_ARTIFACTS="$(normalize_bool "$VERIFY_RELEASE_ARTIFACTS")"
   SPARKLE_ENABLED="$(normalize_bool "$SPARKLE_ENABLED")"
@@ -350,6 +372,45 @@ resolve_release_mode() {
     fi
     VERIFY_RELEASE_ARTIFACTS="1"
   fi
+
+  if [[ "$RELEASE_CHANNEL" == "beta" && "$PRODUCTION_RELEASE" == "1" ]]; then
+    echo "RELEASE_CHANNEL=beta cannot be used with PRODUCTION_RELEASE=1." >&2
+    echo "Set RELEASE_CHANNEL=production for signed/notarized releases." >&2
+    exit 1
+  fi
+}
+
+set_plist_bool_value() {
+  local plist_path="$1"
+  local key="$2"
+  local bool_value="$3"
+  local literal_value
+
+  if [[ "$bool_value" == "1" ]]; then
+    literal_value="true"
+  else
+    literal_value="false"
+  fi
+
+  /usr/libexec/PlistBuddy -c "Delete :$key" "$plist_path" >/dev/null 2>&1 || true
+  /usr/libexec/PlistBuddy -c "Add :$key bool $literal_value" "$plist_path"
+}
+
+configure_app_update_channel() {
+  local plist_path="$APP_DIST_PATH/Contents/Info.plist"
+  local updates_enabled="1"
+
+  if [[ ! -f "$plist_path" ]]; then
+    echo "Built app Info.plist was not found: $plist_path" >&2
+    exit 1
+  fi
+
+  if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
+    updates_enabled="0"
+  fi
+
+  set_plist_bool_value "$plist_path" "$UPDATES_ENABLED_PLIST_KEY" "$updates_enabled"
+  UPDATES_ENABLED_VALUE="$updates_enabled"
 }
 
 ensure_notarization_tools() {
@@ -506,6 +567,7 @@ fi
 
 echo "Copying app bundle..."
 cp -R "$APP_SOURCE" "$APP_DIST_PATH"
+configure_app_update_channel
 
 sign_app_bundle
 
@@ -563,8 +625,10 @@ echo
 echo "Release artifacts created:"
 echo "  App:       $APP_DIST_PATH"
 echo "  DMG:       $DMG_PATH"
+echo "  Release channel: $RELEASE_CHANNEL"
 echo "  Production release: $PRODUCTION_RELEASE"
 echo "  Signing mode: $SIGNING_MODE"
+echo "  $UPDATES_ENABLED_PLIST_KEY: $UPDATES_ENABLED_VALUE"
 if [[ "$SIGNING_MODE" == "developer_id" ]]; then
   echo "  Developer ID identity: $APP_CODESIGN_IDENTITY"
 fi
@@ -597,6 +661,10 @@ if [[ "$NOTARIZE_ENABLED" == "1" ]]; then
   echo "  - App and DMG notarization tickets are stapled."
 else
   echo "  - Notarization is disabled."
+fi
+if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
+  echo "  - Unsigned beta channel: Gatekeeper warning is expected on first launch."
+  echo "  - In-app update checks are disabled; install newer DMG releases manually."
 fi
 if [[ "$VERIFY_RELEASE_ARTIFACTS" == "1" ]]; then
   echo "  - Release verification checks passed."

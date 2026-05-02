@@ -143,7 +143,7 @@ struct ContentView: View {
                         Button(action: handleUpdateButtonTap) {
                             Label(updateButtonTitle, systemImage: updateButtonIcon)
                         }
-                        .disabled(!appUpdateService.canCheckForUpdates)
+                        .disabled(!appUpdateService.isUpdateChecksEnabled || !appUpdateService.canCheckForUpdates)
                         .help(updateButtonHelpText)
                         
                         Button(action: { showingSettings = true }) {
@@ -193,15 +193,24 @@ struct ContentView: View {
     }
     
     private var updateButtonTitle: String {
-        return "Check Update"
+        if appUpdateService.isUpdateChecksEnabled {
+            return "Check Update"
+        }
+        return "Update Unavailable (Beta)"
     }
     
     private var updateButtonIcon: String {
-        return "arrow.triangle.2.circlepath"
+        if appUpdateService.isUpdateChecksEnabled {
+            return "arrow.triangle.2.circlepath"
+        }
+        return "exclamationmark.triangle"
     }
     
     private var updateButtonHelpText: String {
-        return "Check Sparkle feed for updates"
+        if appUpdateService.isUpdateChecksEnabled {
+            return "Check Sparkle feed for updates"
+        }
+        return "Updates are disabled for unsigned beta builds. Install the latest DMG manually."
     }
 
     private func historyRow(for report: Report) -> some View {

@@ -1,0 +1,123 @@
+name: Release macOS App (Beta)
+
+on:
+  push:
+    tags:
+      - "beta-v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Beta tag name (example: beta-v1.1.6-beta.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release_beta:
+    runs-on: macos-latest
+    env:
+      SPARKLE_KEY_ACCOUNT: KarlApp.Report-Template
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG_NAME="${{ inputs.tag_name }}"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "$TAG_NAME" != beta-v* ]]; then
+            echo "Beta tags must start with beta-v (got '$TAG_NAME')." >&2
+            exit 1
+          fi
+
+          echo "RELEASE_TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
+
+      - name: Validate beta tag version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_VERSION="$(
+            awk -F' = ' '/MARKETING_VERSION = / {
+              gsub(/;|"/, "", $2);
+              print $2;
+              exit
+            }' "Report Template/Report Template.xcodeproj/project.pbxproj"
+          )"
+
+          if [[ -z "$APP_VERSION" ]]; then
+            echo "Could not read MARKETING_VERSION from project.pbxproj." >&2
+            exit 1
+          fi
+
+          TAG_PAYLOAD="${RELEASE_TAG_NAME#beta-v}"
+          TAG_BASE_VERSION="${TAG_PAYLOAD%%-*}"
+          if [[ "$TAG_BASE_VERSION" != "$APP_VERSION" ]]; then
+            echo "Beta tag base version ($TAG_BASE_VERSION) must match MARKETING_VERSION ($APP_VERSION)." >&2
+            exit 1
+          fi
+
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+
+      - name: Validate Sparkle signing input
+        shell: bash
+        env:
+          SPARKLE_PRIVATE_KEY_BASE64: ${{ secrets.SPARKLE_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SPARKLE_PRIVATE_KEY_BASE64:-}" ]]; then
+            echo "Missing required repository secret: SPARKLE_PRIVATE_KEY_BASE64" >&2
+            exit 1
+          fi
+
+      - name: Build beta artifacts
+        shell: bash
+        env:
+          RELEASE_CHANNEL: beta
+          PRODUCTION_RELEASE: "0"
+          SPARKLE_KEY_ACCOUNT: ${{ env.SPARKLE_KEY_ACCOUNT }}
+          SPARKLE_ALLOW_KEY_GENERATION: "0"
+          SPARKLE_PRIVATE_KEY_BASE64: ${{ secrets.SPARKLE_PRIVATE_KEY_BASE64 }}
+          COPY_APPCAST_TO_ROOT: "0"
+          RELEASE_TAG: ${{ env.RELEASE_TAG_NAME }}
+          DOWNLOAD_URL_PREFIX: https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG_NAME }}/
+        run: |
+          set -euo pipefail
+          bash ./scripts/release.sh
+
+      - name: Publish GitHub Beta Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG_NAME }}
+          name: ${{ env.RELEASE_TAG_NAME }} (Unsigned Beta)
+          prerelease: true
+          body: |
+            Unsigned beta release (not notarized).
+
+            Install files:
+            - Report-Template-${{ env.APP_VERSION }}.dmg
+            - appcast.xml
+            - install.sh
+
+            First launch on macOS:
+            1. Open the DMG and drag the app to Applications.
+            2. Control-click `Report Template.app` and choose Open.
+            3. Confirm Open once.
+
+            In-app update checks are disabled for beta builds.
+          overwrite_files: true
+          files: |
+            dist/Report-Template-${{ env.APP_VERSION }}.dmg
+            dist/appcast.xml
+            install.sh

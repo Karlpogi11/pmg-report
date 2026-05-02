@@ -1,4 +1,4 @@
-name: Release macOS App
+name: Release macOS App (Production)
 
 on:
   push:
@@ -111,6 +111,7 @@ jobs:
       - name: Build release artifacts
         shell: bash
         env:
+          RELEASE_CHANNEL: production
           PRODUCTION_RELEASE: "1"
           DEVELOPER_ID_APP_IDENTITY: ${{ secrets.DEVELOPER_ID_APP_IDENTITY }}
           NOTARY_KEYCHAIN_PROFILE: ${{ env.NOTARY_KEYCHAIN_PROFILE }}
@@ -130,7 +131,10 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: v${{ env.APP_VERSION }}
+          prerelease: false
           body: |
+            Production notarized release.
+
             Install files:
             - Report-Template-${{ env.APP_VERSION }}.dmg (recommended: drag to Applications)
             - install.sh (optional terminal installer)
@@ -138,6 +142,8 @@ jobs:
             Terminal install (latest):
             curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash
             curl -fsSL https://raw.githubusercontent.com/Karlpogi11/pmg-report/main/install.sh | bash -s -- --yes
+
+            If this workflow fails, do not publish manual unsigned files under a v* production tag.
           generate_release_notes: true
           overwrite_files: true
           files: |
