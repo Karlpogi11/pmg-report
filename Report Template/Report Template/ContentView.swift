@@ -12,10 +12,11 @@ struct ContentView: View {
     @State private var showingNewReportSheet = false
     @State private var showingSettings = false
     @State private var showingTimeEditor = false
-    @State private var showingCopyAlert = false
     @State private var searchText = ""
     @State private var timeEditorValue = Date()
-    @State private var copyAlertMessage = "Report copied to clipboard"
+    @State private var isCopyButtonCopied = false
+    @State private var isCopyAllButtonCopied = false
+    @State private var isPaQsCopied = false
 
     init(appUpdateService: AppUpdateService, appCommandBridge: AppCommandBridge) {
         self.appUpdateService = appUpdateService
@@ -104,8 +105,14 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     HStack(spacing: 10) {
-                        Button(action: copyAllSavedReports) {
-                            Label("Copy All", systemImage: "doc.on.doc")
+                        Button(action: {
+                            copyAllSavedReports()
+                            isCopyAllButtonCopied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                isCopyAllButtonCopied = false
+                            }
+                        }) {
+                            Label(isCopyAllButtonCopied ? "Copied" : "Copy All", systemImage: isCopyAllButtonCopied ? "checkmark" : "doc.on.doc")
                         }
                         .disabled(!viewModel.hasHistory)
                         .help("Copy all saved reports as plain text grouped by date")
@@ -177,11 +184,6 @@ struct ContentView: View {
                     isPresented: $showingTimeEditor,
                     onSave: applyEditedTime
                 )
-            }
-            .alert("Copied!", isPresented: $showingCopyAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(copyAlertMessage)
             }
         }
         .onAppear {
@@ -312,10 +314,12 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 Button(action: {
                     viewModel.copyToClipboard()
-                    copyAlertMessage = "Report copied to clipboard"
-                    showingCopyAlert = true
+                    isCopyButtonCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        isCopyButtonCopied = false
+                    }
                 }) {
-                    Label("Copy", systemImage: "doc.on.clipboard")
+                    Label(isCopyButtonCopied ? "Copied" : "Copy", systemImage: isCopyButtonCopied ? "checkmark" : "doc.on.clipboard")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
@@ -328,6 +332,26 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .help("Copy current report")
                 .keyboardShortcut("c", modifiers: [.command, .shift])
+
+                Button(action: {
+                    viewModel.copyPartsArrivedAndQSL()
+                    isPaQsCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        isPaQsCopied = false
+                    }
+                }) {
+                    Label(isPaQsCopied ? "Copied" : "PA+QSL", systemImage: isPaQsCopied ? "checkmark" : "doc.on.clipboard")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(viewModel.isEmpty ? Color.gray : Color.blue)
+                        .cornerRadius(10)
+                }
+                .disabled(viewModel.isEmpty)
+                .buttonStyle(.plain)
+                .help("Copy Parts Arrived and QSL Returned only")
             }
         }
         .padding(20)
@@ -496,8 +520,6 @@ struct ContentView: View {
 
     private func copyAllSavedReports() {
         viewModel.copyAllHistoryToClipboardGroupedByDate()
-        copyAlertMessage = "All saved reports copied and grouped by date."
-        showingCopyAlert = true
         didDismissBackupReminder = true
     }
 }
@@ -558,9 +580,12 @@ struct NewReportSheet: View {
     @ObservedObject var viewModel: ReportViewModel
     @Binding var isPresented: Bool
     @State private var selectedDate = Date()
-    @State private var selectedTime = Date()
+    @State private var selectedTime: Date = {
+        let cal = Calendar.current
+        return cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
+    }()
     @State private var useCurrentDate = true
-    @State private var useCurrentTime = true
+    @State private var useCurrentTime = false
     
     var body: some View {
         VStack(spacing: 24) {
@@ -1396,6 +1421,25 @@ class ReportViewModel: ObservableObject {
         guard !history.isEmpty else { return }
 
         let attributedText = makeAttributedReport(from: groupedHistoryPlainText())
+        writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
+    }
+
+    func copyPartsArrivedAndQSL() {
+        let paField = settings.fields.first { $0.id == "partsArrived" }
+        let qslField = settings.fields.first { $0.id == "qslReturned" }
+
+        let paLabel = paField?.name ?? "PARTS ARRIVED"
+        let qslLabel = qslField?.name ?? "QSL RETURNED"
+
+        let paValue = currentReport.value(for: "partsArrived")
+        let qslValue = currentReport.value(for: "qslReturned")
+
+        var text = "\(paLabel)\n\(paValue)"
+        if !qslValue.isEmpty {
+            text += "\n\n\(qslLabel)\n\(qslValue)"
+        }
+
+        let attributedText = makeAttributedReport(from: text)
         writeToPasteboard(plainText: attributedText.string, attributedText: attributedText)
     }
 
