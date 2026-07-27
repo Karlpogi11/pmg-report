@@ -1040,7 +1040,7 @@ struct LinkDetectingTextEditor: NSViewRepresentable {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
 
-        let textView = NSTextView()
+        let textView = PrintBlockingTextView()
         textView.isEditable = true
         textView.isSelectable = true
         textView.isRichText = true
@@ -1100,6 +1100,18 @@ struct LinkDetectingTextEditor: NSViewRepresentable {
                 return true
             }
             return false
+        }
+    }
+
+    class PrintBlockingTextView: NSTextView {
+        override func keyDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.command),
+               let chars = event.charactersIgnoringModifiers?.lowercased(),
+               chars == "p" {
+                nextResponder?.keyDown(with: event)
+                return
+            }
+            super.keyDown(with: event)
         }
     }
 }
