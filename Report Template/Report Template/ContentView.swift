@@ -311,7 +311,7 @@ struct ContentView: View {
             Spacer()
             
             // Action Buttons
-            HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 Button(action: {
                     viewModel.copyToClipboard()
                     isCopyButtonCopied = true
@@ -320,13 +320,13 @@ struct ContentView: View {
                     }
                 }) {
                     Label(isCopyButtonCopied ? "Copied" : "Copy", systemImage: isCopyButtonCopied ? "checkmark" : "doc.on.clipboard")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                        .font(.caption)
+                        .fontWeight(.semibold)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
                         .background(viewModel.isEmpty ? Color.gray : Color.blue)
-                        .cornerRadius(10)
+                        .cornerRadius(12)
                 }
                 .disabled(viewModel.isEmpty)
                 .buttonStyle(.plain)
@@ -341,13 +341,13 @@ struct ContentView: View {
                     }
                 }) {
                     Label(isPaQsCopied ? "Copied" : "PA+QSL", systemImage: isPaQsCopied ? "checkmark" : "doc.on.clipboard")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                        .font(.caption)
+                        .fontWeight(.semibold)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
                         .background(viewModel.isEmpty ? Color.gray : Color.blue)
-                        .cornerRadius(10)
+                        .cornerRadius(12)
                 }
                 .disabled(viewModel.isEmpty)
                 .buttonStyle(.plain)
@@ -1021,13 +1021,94 @@ struct AddFieldSheet: View {
     }
 }
 
+// MARK: - Link Detecting Text Editor
+
+struct LinkDetectingTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    let font: NSFont
+
+    static let linkAttributes: [NSAttributedString.Key: Any] = [
+        .foregroundColor: NSColor.blue,
+        .underlineStyle: NSUnderlineStyle.single.rawValue,
+    ]
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+
+        let textView = NSTextView()
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isRichText = true
+        textView.font = font
+        textView.typingAttributes = [.font: font, .foregroundColor: NSColor.labelColor]
+        textView.isAutomaticLinkDetectionEnabled = true
+        textView.enabledTextCheckingTypes = NSTextCheckingResult.CheckingType.link.rawValue
+        textView.delegate = context.coordinator
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 4, height: 4)
+        textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width, .height]
+        textView.allowsUndo = true
+        textView.linkTextAttributes = Self.linkAttributes
+
+        if !text.isEmpty {
+            textView.string = text
+            textView.checkTextInDocument(nil)
+        }
+
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+            textView.checkTextInDocument(nil)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: LinkDetectingTextEditor
+
+        init(_ parent: LinkDetectingTextEditor) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            textView.checkTextInDocument(nil)
+        }
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            if let url = link as? URL {
+                NSWorkspace.shared.open(url)
+                return true
+            }
+            return false
+        }
+    }
+}
+
 // MARK: - Modern Report Section
 
 struct ModernReportSection: View {
     let title: String
     @Binding var text: String
     let icon: String
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -1039,13 +1120,14 @@ struct ModernReportSection: View {
                     .fontWeight(.semibold)
                     .textCase(.uppercase)
             }
-            
-            TextEditor(text: $text)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 120)
-                .background(Color(nsColor: .textBackgroundColor))
-                .cornerRadius(10)
+
+            LinkDetectingTextEditor(
+                text: $text,
+                font: .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            )
+            .frame(minHeight: 120)
+            .background(Color(nsColor: .textBackgroundColor))
+            .cornerRadius(10)
         }
     }
 }
@@ -1097,7 +1179,7 @@ struct Report: Identifiable, Codable {
         self.stockOut = ""
         self.safekeeping = ""
         self.kbbShipout = ""
-        self.additionalNotes = "Checked parts pending, parts inventory"
+        self.additionalNotes = "Checked parts pending\nparts inventory"
         self.createdAt = date
         self.customFields = [:]
     }
@@ -1365,6 +1447,8 @@ class ReportViewModel: ObservableObject {
         currentReport = Report(date: date, time: time)
         hasActiveReport = true
         hasUnsavedChanges = false
+        history.insert(currentReport, at: 0)
+        saveHistory()
     }
     
     func saveCurrentReport() {
@@ -1556,6 +1640,13 @@ class ReportViewModel: ObservableObject {
             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
         ) {
             pasteboardItem.setData(rtfData, forType: .rtf)
+        }
+
+        if let htmlData = try? attributedText.data(
+            from: NSRange(location: 0, length: attributedText.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.html]
+        ) {
+            pasteboardItem.setData(htmlData, forType: .html)
         }
 
         let pasteboard = NSPasteboard.general
