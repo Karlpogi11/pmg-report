@@ -1050,7 +1050,8 @@ struct LinkDetectingTextEditor: NSViewRepresentable {
         textView.enabledTextCheckingTypes = NSTextCheckingResult.CheckingType.link.rawValue
         textView.delegate = context.coordinator
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 4, height: 4)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainerInset = NSSize(width: 0, height: 0)
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.isHorizontallyResizable = false
