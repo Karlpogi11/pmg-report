@@ -1028,8 +1028,9 @@ struct LinkDetectingTextEditor: NSViewRepresentable {
     let font: NSFont
 
     static let linkAttributes: [NSAttributedString.Key: Any] = [
-        .foregroundColor: NSColor.blue,
+        .foregroundColor: NSColor.linkColor,
         .underlineStyle: NSUnderlineStyle.single.rawValue,
+        .cursor: NSCursor.pointingHand,
     ]
 
     func makeNSView(context: Context) -> NSScrollView {
